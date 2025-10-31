@@ -7,8 +7,8 @@ rm(lst)
 # Bad : 3급수 이하
 X <- Geum
 Geumdf <- as.data.frame(Geum$data)
-month <- 6 # 2022년 6월
-good <- 4
+month <- 1 # 2022년 1월
+good <- 2
 X$data <- Geum$data[, c(1:4, month + 4)]
 
 X$data[,5] <- factor(ifelse(Geumdf[, month + 4] <= good, "Good", "Bad"), c("Good", "Bad"))
@@ -154,3 +154,193 @@ abline(h = 80, col = "lightgray")
 plot(correct3 / length(built$marks) * 100, ylim = c(70, 90), xlab = "neighbors", ylab = "accuracy (%)", main = "(g) Comparison: knn")
 abline(h = 80, col = "lightgray")
 dev.off()
+
+## 5-fold cross validation
+
+set.seed(0)
+
+tb <- table(X$data$marks)
+folds <- rep(1, 129)
+for (i in 1:2)
+  folds[X$data$marks == names(tb[i])] <- as.integer((order(runif(tb[i])) - 1) / tb[i] * 5) + 1
+
+iter <- 20L
+
+visited <- treeparty.visit(X)
+built <- treeparty.build(X, visited)
+labels <- levels(built$marks)
+
+correct <- rep(0L, iter)
+for (i in 1L:5L)
+{
+  weight <- ifelse(folds == i, 0, 1)
+  adapted <- treeparty.adaboost(built, depth = 3, iter = iter, weight = weight, eval = "accuracy")
+  
+  ## iteration에 따른 예측값의 변화를 모두 확인하기 위해
+  ## treeparty.predict.ada의 코드를 긁어왔다.
+  where <- which(folds == i)
+  preds <- matrix(0, length(where), length(labels))
+  for (it in 1L:iter)
+  {
+    pred <- treeparty.predict(built, adapted$stumps[[it]], index = where)
+    pred <- as.integer(pred)
+    for (f in 1:nrow(preds))
+      preds[f, pred[f]] <- preds[f, pred[f]] + adapted$say[it]
+    pred <- apply(preds, 1, which.max)
+    correct[it] <- correct[it] + sum(pred == as.integer(built$marks[where]))
+  }
+  cat(i, "/", 5, '\n')
+}
+correct.accuracy <- correct
+
+correct2 <- rep(0L, iter)
+labels <- levels(y)
+for (i in 1:5)
+{
+  where <- which(folds == i)
+  adapted2 <- ada(x[-where,], y[-where], n_rounds = iter, verbose = F, progress = FALSE, tree_depth = 3, split = "accuracy")
+  preds <- matrix(0, length(where), length(labels))
+  for (it in 1L:iter)
+  {
+    pred <- stats::predict(adapted2$trees[[it]], x[where,], type = "class")
+    pred <- as.integer(pred)
+    for (f in 1:nrow(preds))
+      preds[f, pred[f]] <- preds[f, pred[f]] + adapted2$alphas[it]
+    pred <- apply(preds, 1, which.max)
+    correct2[it] <- correct2[it] + sum(pred == as.integer(y[where]))
+  }
+  cat(i, "/", 5, '\n')
+}
+correct2.accuracy <- correct2
+
+correct3 <- rep(0L, iter)
+y <- X$data$marks
+x <- data.frame(x = X$data$x, y = X$data$y)
+
+labels <- levels(y)
+for (i in 1:5)
+{
+  where <- which(folds == i)
+  for (it in seq(1L, iter, 2))
+    correct3[it] <- correct3[it] + sum(knn(x[-where,], x[where,], y[-where], it) == y[where])
+}
+
+png("accuracy.geum5.png", 1000, 576)
+par(mfrow = c(2, 4))
+plot(correct.accuracy / length(built$marks) * 100, ylim = c(70, 90), xlab = "iteration", ylab = "accuracy (%)", main = "(a) Proposed: MR")
+abline(h = 80, col = "lightgray")
+plot(correct.gini / length(built$marks) * 100, ylim = c(70, 90), xlab = "iteration", ylab = "accuracy (%)", main = "(b) Proposed: gini")
+abline(h = 80, col = "lightgray")
+plot(correct.entropy / length(built$marks) * 100, ylim = c(70, 90), xlab = "iteration", ylab = "accuracy (%)", main = "(c) Proposed: entropy")
+abline(h = 80, col = "lightgray")
+plot.new()
+plot(correct2.accuracy / length(built$marks) * 100, ylim = c(70, 90), xlab = "iteration", ylab = "accuracy (%)", main = "(d) Comparison: MR")
+abline(h = 80, col = "lightgray")
+plot(correct2.gini / length(built$marks) * 100, ylim = c(70, 90), xlab = "iteration", ylab = "accuracy (%)", main = "(e) Comparison: gini")
+abline(h = 80, col = "lightgray")
+plot(correct2.entropy / length(built$marks) * 100, ylim = c(70, 90), xlab = "iteration", ylab = "accuracy (%)", main = "(f) Comparison: entropy")
+abline(h = 80, col = "lightgray")
+plot(correct3 / length(built$marks) * 100, ylim = c(70, 90), xlab = "neighbors", ylab = "accuracy (%)", main = "(g) Comparison: knn")
+abline(h = 80, col = "lightgray")
+dev.off()
+
+
+
+## 10-fold cross validation
+
+set.seed(0)
+
+tb <- table(X$data$marks)
+folds <- rep(1, 129)
+for (i in 1:2)
+  folds[X$data$marks == names(tb[i])] <- as.integer((order(runif(tb[i])) - 1) / tb[i] * 10) + 1
+
+iter <- 20L
+
+visited <- treeparty.visit(X)
+built <- treeparty.build(X, visited)
+labels <- levels(built$marks)
+
+correct <- rep(0L, iter)
+for (i in 1L:10L)
+{
+  weight <- ifelse(folds == i, 0, 1)
+  adapted <- treeparty.adaboost(built, depth = 3, iter = iter, weight = weight, eval = "entropy")
+  
+  ## iteration에 따른 예측값의 변화를 모두 확인하기 위해
+  ## treeparty.predict.ada의 코드를 긁어왔다.
+  where <- which(folds == i)
+  preds <- matrix(0, length(where), length(labels))
+  for (it in 1L:iter)
+  {
+    pred <- treeparty.predict(built, adapted$stumps[[it]], index = where)
+    pred <- as.integer(pred)
+    for (f in 1:nrow(preds))
+      preds[f, pred[f]] <- preds[f, pred[f]] + adapted$say[it]
+    pred <- apply(preds, 1, which.max)
+    correct[it] <- correct[it] + sum(pred == as.integer(built$marks[where]))
+  }
+  cat(i, "/", 10, '\n')
+}
+correct.entropy <- correct
+
+labels <- levels(y)
+correct2 <- rep(0L, iter)
+for (i in 1:10)
+{
+  where <- which(folds == i)
+  adapted2 <- ada(x[-where,], y[-where], n_rounds = iter, verbose = F, progress = FALSE, tree_depth = 3, split = "entropy")
+  preds <- matrix(0, length(where), length(labels))
+  for (it in 1L:iter)
+  {
+    pred <- stats::predict(adapted2$trees[[it]], x[where,], type = "class")
+    pred <- as.integer(pred)
+    for (f in 1:nrow(preds))
+      preds[f, pred[f]] <- preds[f, pred[f]] + adapted2$alphas[it]
+    pred <- apply(preds, 1, which.max)
+    correct2[it] <- correct2[it] + sum(pred == as.integer(y[where]))
+  }
+  cat(i, "/", 10, '\n')
+}
+correct2.entropy <- correct2
+
+correct3 <- rep(0L, iter)
+y <- X$data$marks
+x <- data.frame(x = X$data$x, y = X$data$y)
+
+labels <- levels(y)
+for (i in 1:10)
+{
+  where <- which(folds == i)
+  for (it in seq(1L, iter, 2))
+    correct3[it] <- correct3[it] + sum(knn(x[-where,], x[where,], y[-where], it) == y[where])
+}
+
+png("accuracy.geum10.png", 1000, 576)
+par(mfrow = c(2, 4))
+plot(correct.accuracy / length(built$marks) * 100, ylim = c(60, 90), xlab = "iteration", ylab = "accuracy (%)", main = "(a) Proposed: MR")
+abline(h = 80, col = "lightgray")
+plot(correct.gini / length(built$marks) * 100, ylim = c(60, 90), xlab = "iteration", ylab = "accuracy (%)", main = "(b) Proposed: gini")
+abline(h = 80, col = "lightgray")
+plot(correct.entropy / length(built$marks) * 100, ylim = c(60, 90), xlab = "iteration", ylab = "accuracy (%)", main = "(c) Proposed: entropy")
+abline(h = 80, col = "lightgray")
+plot.new()
+plot(correct2.accuracy / length(built$marks) * 100, ylim = c(60, 90), xlab = "iteration", ylab = "accuracy (%)", main = "(d) Comparison: MR")
+abline(h = 80, col = "lightgray")
+plot(correct2.gini / length(built$marks) * 100, ylim = c(60, 90), xlab = "iteration", ylab = "accuracy (%)", main = "(e) Comparison: gini")
+abline(h = 80, col = "lightgray")
+plot(correct2.entropy / length(built$marks) * 100, ylim = c(60, 90), xlab = "iteration", ylab = "accuracy (%)", main = "(f) Comparison: entropy")
+abline(h = 80, col = "lightgray")
+plot(correct3 / length(built$marks) * 100, ylim = c(60, 90), xlab = "neighbors", ylab = "accuracy (%)", main = "(g) Comparison: knn")
+abline(h = 80, col = "lightgray")
+dev.off()
+
+# Displaying the performances
+res <- rbind(correct.accuracy[1:4 * 5], correct.gini[1:4 * 5], correct.entropy[1:4 * 5],
+             correct2.accuracy[1:4 * 5], correct2.gini[1:4 * 5], correct2.entropy[1:4 * 5],
+             correct3[c(5, 9, 15, 19)])
+res <- cbind(res,
+             c(max(correct.accuracy), max(correct.gini), max(correct.entropy),
+               max(correct2.accuracy), max(correct2.gini), max(correct2.entropy),
+               max(correct3))) / 1.29
+round(res, 1)

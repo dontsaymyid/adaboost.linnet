@@ -473,7 +473,7 @@ treeparty.split <- function(count, minbucket = 30, eval = "accuracy", significan
     
     min.stat <- min(test.stats, na.rm = T)
     res$root <- which.min(test.stats)
-    res$impurity <- max.stat / count$obs
+    res$impurity <- min.stat / count$obs
     
     res$pred.sub <- count$labels[which.max(count$count[res$root,])]
     suptree <- count$count[count$root,] - count$count[res$root,]

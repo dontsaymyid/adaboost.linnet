@@ -26,6 +26,13 @@ plot(X, cols = c("blue", "red"), main = "") # 2022년 6월 금강 총유기탄�
 
 iter <- 20L
 
+evals <- c("accuracy", "gini", "entropy")
+## correct.*  : for proposed
+## correct2.* : for comparison
+## correct3   : for knn
+
+for (eval in evals)
+{
 visited <- treeparty.visit(X)
 built <- treeparty.build(X, visited)
 correct <- rep(0L, iter)
@@ -36,7 +43,7 @@ for (i in 1L:length(built$marks))
 {
   weight <- rep(1, length(built$marks))
   weight[i] <- 0
-  adapted <- treeparty.adaboost(built, depth = 3, iter = iter, weight = weight, eval = "gini")
+  adapted <- treeparty.adaboost(built, depth = 3, iter = iter, weight = weight, eval = eval)
   
   ## iteration에 따른 예측값의 변화를 모두 확인하기 위해
   ## treeparty.predict.ada의 코드를 긁어왔다.
@@ -58,10 +65,15 @@ for (i in 1L:length(built$marks))
   if (i < length(built$marks))
     print((Sys.time() - starttime) * (length(built$marks) - i) / i)
 }
-correct.gini <- correct
+if (eval == evals[1])
+  correct.accuracy <- correct
+if (eval == evals[2])
+  correct.gini <- correct
+if (eval == evals[3])
+  correct.entropy <- correct
 
 X.wrong <- X
-X.wrong$data <- X$data[!correct.last]
+X.wrong$data <- X$data[!correct.last,]
 png("geum.T2.png", 640, 480)
 par(mar = c(0, 2, 0, 0))
 par(cex = 3)
@@ -79,7 +91,7 @@ labels <- levels(y)
 starttime <- Sys.time()
 for (i in 1:length(y))
 {
-  adapted2 <- ada(x[-i,], y[-i], n_rounds = iter, verbose = FALSE, progress = FALSE, tree_depth = 3, split = "gini")
+  adapted2 <- ada(x[-i,], y[-i], n_rounds = iter, verbose = FALSE, progress = FALSE, tree_depth = 3, split = eval)
   preds <- rep(0, length(labels))
   for (it in 1L:iter)
   {
@@ -99,7 +111,13 @@ for (i in 1:length(y))
   if (i < length(y))
     print((Sys.time() - starttime) * (length(y) - i) / i)
 }
-correct2.gini <- correct2
+if (eval == evals[1])
+  correct2.accuracy <- correct
+if (eval == evals[2])
+  correct2.gini <- correct
+if (eval == evals[3])
+  correct2.entropy <- correct
+}
 
 correct3 <- rep(0L, iter)
 y <- X$data$marks
@@ -112,7 +130,6 @@ for (i in 1:length(y))
     if (knn(x[-i,], x[i,], y[-i], it) == y[i])
       correct3[it] <- correct3[it] + 1
 }
-
 
 
 X.wrong <- X
@@ -131,7 +148,7 @@ dev.off()
 
 png("correct.E.png", width = 640, height = 480)
 X.correct2 <- X
-X.correct2$data <- X$data[correct2.last]
+X.correct2$data <- X$data[correct2.last,]
 plot(X, main = "Euclidean adaboost")
 plot(X.correct2, add = TRUE, cols = "pink")
 dev.off()
@@ -174,7 +191,7 @@ correct <- rep(0L, iter)
 for (i in 1L:5L)
 {
   weight <- ifelse(folds == i, 0, 1)
-  adapted <- treeparty.adaboost(built, depth = 3, iter = iter, weight = weight, eval = "accuracy")
+  adapted <- treeparty.adaboost(built, depth = 3, iter = iter, weight = weight, eval = eval)
   
   ## iteration에 따른 예측값의 변화를 모두 확인하기 위해
   ## treeparty.predict.ada의 코드를 긁어왔다.
@@ -198,7 +215,7 @@ labels <- levels(y)
 for (i in 1:5)
 {
   where <- which(folds == i)
-  adapted2 <- ada(x[-where,], y[-where], n_rounds = iter, verbose = F, progress = FALSE, tree_depth = 3, split = "accuracy")
+  adapted2 <- ada(x[-where,], y[-where], n_rounds = iter, verbose = F, progress = FALSE, tree_depth = 3, split = eval)
   preds <- matrix(0, length(where), length(labels))
   for (it in 1L:iter)
   {
@@ -261,11 +278,13 @@ visited <- treeparty.visit(X)
 built <- treeparty.build(X, visited)
 labels <- levels(built$marks)
 
+for (eval in evals)
+{
 correct <- rep(0L, iter)
 for (i in 1L:10L)
 {
   weight <- ifelse(folds == i, 0, 1)
-  adapted <- treeparty.adaboost(built, depth = 3, iter = iter, weight = weight, eval = "entropy")
+  adapted <- treeparty.adaboost(built, depth = 3, iter = iter, weight = weight, eval = eval)
   
   ## iteration에 따른 예측값의 변화를 모두 확인하기 위해
   ## treeparty.predict.ada의 코드를 긁어왔다.
@@ -282,14 +301,20 @@ for (i in 1L:10L)
   }
   cat(i, "/", 10, '\n')
 }
-correct.entropy <- correct
+if (eval == evals[1])
+  correct.accuracy <- correct
+if (eval == evals[2])
+  correct.gini <- correct
+if (eval == evals[3])
+  correct.entropy <- correct
+}
 
 labels <- levels(y)
 correct2 <- rep(0L, iter)
 for (i in 1:10)
 {
   where <- which(folds == i)
-  adapted2 <- ada(x[-where,], y[-where], n_rounds = iter, verbose = F, progress = FALSE, tree_depth = 3, split = "entropy")
+  adapted2 <- ada(x[-where,], y[-where], n_rounds = iter, verbose = F, progress = FALSE, tree_depth = 3, split = eval)
   preds <- matrix(0, length(where), length(labels))
   for (it in 1L:iter)
   {
@@ -302,7 +327,13 @@ for (i in 1:10)
   }
   cat(i, "/", 10, '\n')
 }
-correct2.entropy <- correct2
+if (eval == evals[1])
+  correct2.accuracy <- correct
+if (eval == evals[2])
+  correct2.gini <- correct
+if (eval == evals[3])
+  correct2.entropy <- correct
+}
 
 correct3 <- rep(0L, iter)
 y <- X$data$marks

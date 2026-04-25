@@ -46,6 +46,13 @@ dev.off()
 seed.min <- 1L
 seed.max <- 100L
 iter <- 100L
+
+evals <- c("accuracy", "gini", "entropy")
+## correct.*  : for proposed
+## correct2.* : for comparison
+
+for (eval in evals)
+{
 correct.treeparty <- matrix(0L, seed.max, iter)
 correct.Euclidean <- matrix(0L, seed.max, iter)
 
@@ -72,7 +79,7 @@ for (seed in seed.min:seed.max)
   {
     weight <- rep(1, length(built$marks))
     weight[i] <- 0
-    adapted <- treeparty.adaboost(built, depth = 3, iter = iter, weight = weight, eval = "accuracy")
+    adapted <- treeparty.adaboost(built, depth = 3, iter = iter, weight = weight, eval = eval)
     
     ## iteration에 따른 예측값의 변화를 모두 확인하기 위해
     ## treeparty.predict.ada의 코드를 긁어왔다.
@@ -90,7 +97,7 @@ for (seed in seed.min:seed.max)
     if (i < 396 || seed < seed.max)
       print((Sys.time() - starttime) * (396 - i + (seed.max - seed) * 396) / (i + (seed - seed.min) * 396))
   }
-  write.csv(correct.treeparty, "treeparty.accuracy.csv")
+  write.csv(correct.Euclidean, paste("treeparty.", eval, ".csv", sep = ""))
   
   y <- X$data$marks
   x <- data.frame(x = X$data$x, y = X$data$y)
@@ -98,7 +105,7 @@ for (seed in seed.min:seed.max)
   labels <- levels(y)
   for (i in 1:length(y))
   {
-    adapted2 <- ada(x[-i,], y[-i], n_rounds = iter, verbose = F, progress = F, split = "accuracy")
+    adapted2 <- ada(x[-i,], y[-i], n_rounds = iter, verbose = F, progress = F, split = eval)
     preds <- rep(0, length(labels))
     for (it in 1L:iter)
     {
@@ -112,7 +119,8 @@ for (seed in seed.min:seed.max)
     if (i < 396 || seed < seed.max)
       print((Sys.time() - starttime) * (396 - i + (seed.max - seed) * 396) / (i + (seed - seed.min) * 396))
   }
-  write.csv(correct.Euclidean, "Euclidean.accuracy.csv")
+  write.csv(correct.Euclidean, paste("Euclidean.", eval, ".csv", sep = ""))
+}
 }
 
 seed.min <- 1L
@@ -156,6 +164,9 @@ for (seed in seed.min:seed.max)
 seed.min <- 1L
 seed.max <- 100L
 iter <- 100L
+
+for (eval in evals)
+{
 correct.treeparty <- matrix(0L, seed.max, iter)
 correct.Euclidean <- matrix(0L, seed.max, iter)
 
@@ -182,7 +193,7 @@ for (seed in seed.min:seed.max)
   for (i in 1L:5L)
   {
     weight <- ifelse(folds == i, 0, 1)
-    adapted <- treeparty.adaboost(built, depth = 3, iter = iter, weight = weight, eval = "entropy")
+    adapted <- treeparty.adaboost(built, depth = 3, iter = iter, weight = weight, eval = eval)
     
     ## iteration에 따른 예측값의 변화를 모두 확인하기 위해
     ## treeparty.predict.ada의 코드를 긁어왔다.
@@ -199,7 +210,7 @@ for (seed in seed.min:seed.max)
     }
     cat(i, "/", 5, '\n')
   }
-  write.csv(correct.treeparty, "treeparty5.entropy.csv")
+  write.csv(correct.treeparty, paste("treeparty5.", eval, ".csv", sep = ""))
   y <- X$data$marks
   x <- data.frame(x = X$data$x, y = X$data$y)
   
@@ -207,7 +218,7 @@ for (seed in seed.min:seed.max)
   for (i in 1L:5L)
   {
     where <- which(folds == i)
-    adapted2 <- ada(x[-where,], y[-where], n_rounds = iter, verbose = F, progress = F, split = "entropy")
+    adapted2 <- ada(x[-where,], y[-where], n_rounds = iter, verbose = F, progress = F, split = eval)
     preds <- matrix(0, length(where), length(labels))
     for (it in 1L:iter)
     {
@@ -220,9 +231,9 @@ for (seed in seed.min:seed.max)
     }
     cat(i, "/", 5, '\n')
   }
-  write.csv(correct.Euclidean, "Euclidean5.entropy.csv")
+  write.csv(correct.Euclidean, paste("Euclidean5.", eval, ".csv"))
 }
-
+}
 
 
 ## 10-fold cross validation
@@ -230,6 +241,9 @@ for (seed in seed.min:seed.max)
 seed.min <- 1L
 seed.max <- 100L
 iter <- 100L
+
+for (eval in evals)
+{
 correct.treeparty <- matrix(0L, seed.max, iter)
 correct.Euclidean <- matrix(0L, seed.max, iter)
 
@@ -256,7 +270,7 @@ for (seed in seed.min:seed.max)
   for (i in 1L:10L)
   {
     weight <- ifelse(folds == i, 0, 1)
-    adapted <- treeparty.adaboost(built, depth = 3, iter = iter, weight = weight, eval = "accuracy")
+    adapted <- treeparty.adaboost(built, depth = 3, iter = iter, weight = weight, eval = eval)
     
     ## iteration에 따른 예측값의 변화를 모두 확인하기 위해
     ## treeparty.predict.ada의 코드를 긁어왔다.
@@ -273,7 +287,7 @@ for (seed in seed.min:seed.max)
     }
     cat(i, "/", 10, '\n')
   }
-  write.csv(correct.treeparty, "treeparty10.accuracy.csv")
+  write.csv(correct.treeparty, paste("treeparty10.", eval, ".csv", sep = ""))
   y <- X$data$marks
   x <- data.frame(x = X$data$x, y = X$data$y)
   
@@ -281,7 +295,7 @@ for (seed in seed.min:seed.max)
   for (i in 1L:10L)
   {
     where <- which(folds == i)
-    adapted2 <- ada(x[-where,], y[-where], n_rounds = iter, verbose = F, progress = F, split = "accuracy")
+    adapted2 <- ada(x[-where,], y[-where], n_rounds = iter, verbose = F, progress = F, split = eval)
     preds <- matrix(0, length(where), length(labels))
     for (it in 1L:iter)
     {
@@ -294,5 +308,98 @@ for (seed in seed.min:seed.max)
     }
     cat(i, "/", 10, '\n')
   }
-  write.csv(correct.Euclidean, "Euclidean10.accuracy.csv")
+  write.csv(correct.Euclidean, paste("Euclidean10.", eval, ".csv"))
 }
+}
+
+
+## 88번 시드 재현
+
+seed <- 88
+iter <- 67
+set.seed(88)
+X <- runiflpp(n = 396, L = maze, nsim = 1)
+X$data <- cbind(X$data, marks = sapply(X$data$seg, function(x) ifelse(x %in% mainroute, "main", "sub")))
+fromjunction <- sapply(X$data$seg, function(x) x %in% junction)
+tojunction <- sapply(X$domain$to[X$data$seg], function(x) x %in% junction)
+mutation <- (1 - X$data$tp) * fromjunction + X$data$tp * tojunction
+X$data$marks[runif(396) < mutation] <- "junction"
+X$data$marks <- as.factor(X$data$marks)
+X$ctype <- c(X$ctype, as.factor("mark"))
+plot(X, main = paste("Seed", as.character(seed)))
+
+visited <- treeparty.visit(X)
+built <- treeparty.build(X, visited)
+labels <- levels(built$marks)
+pred.treeparty <- rep(0, length(built$marks))
+starttime <- Sys.time()
+for (i in 1L:length(built$marks))
+{
+  weight <- rep(1, length(built$marks))
+  weight[i] <- 0
+  adapted <- treeparty.adaboost(built, depth = 3, iter = iter, weight = weight, eval = "accuracy")
+  
+  preds <- rep(0, 3)
+  ## iteration에 따른 예측값의 변화를 모두 확인하기 위해
+  ## treeparty.predict.ada의 코드를 긁어왔다.
+  for (it in 1L:iter)
+  {
+    pred <- treeparty.predict(built, adapted$stumps[[it]], index = i)
+    pred <- as.integer(pred)
+    preds[pred] <- preds[pred] + adapted$say[it]
+  }
+  pred.treeparty[i] <- which.max(preds)
+  
+  #cat(i, "/", 396, '\n')
+  if (i < 396)
+    print((Sys.time() - starttime) * (396 - i) / i)
+}
+
+pred.treeparty <- factor(pred.treeparty, levels = 1:3)
+levels(pred.treeparty) <- levels(built$marks)
+
+Xpred <- X
+Xpred$data$marks <- pred.treeparty
+X.wrong <- Xpred
+X.wrong$data <- Xpred$data[built$marks != pred.treeparty]
+png("maze.treeparty.accuracy.png", 480, 400)
+par(mar = c(0, 0, 5, 0))
+par(cex = 1)
+plot(Xpred, cex = 3, cols = "pink", main = "(a) Proposed: MR")
+plot(X.wrong, add = T, cols = "black", cex = 3)
+dev.off()
+
+y <- X$data$marks
+x <- data.frame(x = X$data$x, y = X$data$y)
+
+labels <- levels(y)
+pred.Euclidean <- rep(0, length(built$marks))
+starttime <- Sys.time()
+for (i in 1:length(y))
+{
+  adapted2 <- ada(x[-i,], y[-i], n_rounds = iter, verbose = FALSE, progress = FALSE)
+  preds <- rep(0, 3)
+  for (it in 1L:iter)
+  {
+    pred <- stats::predict(adapted2$trees[[it]], x[i,], type = "class")
+    pred <- as.integer(pred)
+    preds[pred] <- preds[pred] + adapted2$alphas[it]
+  }
+  pred.Euclidean[i] <- which.max(preds)
+  if (i < 396)
+    print((Sys.time() - starttime) * (396 - i) / i)
+}
+
+pred.Euclidean <- factor(pred.Euclidean, levels = 1:3)
+levels(pred.Euclidean) <- levels(built$marks)
+
+Xpred <- X
+Xpred$data$marks <- pred.Euclidean
+X.wrong <- Xpred
+X.wrong$data <- Xpred$data[built$marks != pred.Euclidean]
+png("maze.Euclidean.png", 480, 400)
+par(mar = c(0, 0, 5, 0))
+par(cex = 1)
+plot(Xpred, cex = 3, cols = "pink", main = "(c) Comparison: gini")
+plot(X.wrong, add = T, cols = "black", cex = 3)
+dev.off()

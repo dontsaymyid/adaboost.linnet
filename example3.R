@@ -112,11 +112,11 @@ for (i in 1:length(y))
     print((Sys.time() - starttime) * (length(y) - i) / i)
 }
 if (eval == evals[1])
-  correct2.accuracy <- correct
+  correct2.accuracy <- correct2
 if (eval == evals[2])
-  correct2.gini <- correct
+  correct2.gini <- correct2
 if (eval == evals[3])
-  correct2.entropy <- correct
+  correct2.entropy <- correct2
 }
 
 correct3 <- rep(0L, iter)
@@ -183,6 +183,8 @@ for (i in 1:2)
 
 iter <- 20L
 
+for (eval in evals)
+{
 visited <- treeparty.visit(X)
 built <- treeparty.build(X, visited)
 labels <- levels(built$marks)
@@ -208,7 +210,12 @@ for (i in 1L:5L)
   }
   cat(i, "/", 5, '\n')
 }
-correct.accuracy <- correct
+if (eval == evals[1])
+  correct.accuracy <- correct
+if (eval == evals[2])
+  correct.gini <- correct
+if (eval == evals[3])
+  correct.entropy <- correct
 
 correct2 <- rep(0L, iter)
 labels <- levels(y)
@@ -228,7 +235,13 @@ for (i in 1:5)
   }
   cat(i, "/", 5, '\n')
 }
-correct2.accuracy <- correct2
+if (eval == evals[1])
+  correct2.accuracy <- correct2
+if (eval == evals[2])
+  correct2.gini <- correct2
+if (eval == evals[3])
+  correct2.entropy <- correct2
+}
 
 correct3 <- rep(0L, iter)
 y <- X$data$marks
@@ -307,7 +320,6 @@ if (eval == evals[2])
   correct.gini <- correct
 if (eval == evals[3])
   correct.entropy <- correct
-}
 
 labels <- levels(y)
 correct2 <- rep(0L, iter)
@@ -328,11 +340,11 @@ for (i in 1:10)
   cat(i, "/", 10, '\n')
 }
 if (eval == evals[1])
-  correct2.accuracy <- correct
+  correct2.accuracy <- correct2
 if (eval == evals[2])
-  correct2.gini <- correct
+  correct2.gini <- correct2
 if (eval == evals[3])
-  correct2.entropy <- correct
+  correct2.entropy <- correct2
 }
 
 correct3 <- rep(0L, iter)

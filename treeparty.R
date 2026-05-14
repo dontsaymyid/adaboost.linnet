@@ -79,7 +79,7 @@ treeparty.visit <- function(x, root = 1)
 ## 관측치를 변경할 경우, build부터 다시 수행해야 한다.
 ## <marks>는 <x$data$marks>를 벡터로 변환한 것이며,
 ## hyperframe의 개별 탐색 성능이 좋지 않은 문제를 해결했다.
-## 
+## duplicate는 자신의 부모와 좌표가 동일함을 의미한다.
 treeparty.build <- function(x, visit)
 {
   ## 1 관측치를 트리 형태로 배치한다. 이때 관측치 트리에 junction이 존재하나 도메인 트리에서 간극이 확인될 경우, null vertex를 추가한다.
@@ -105,13 +105,24 @@ treeparty.build <- function(x, visit)
   res <- list()
   res$obs <- obs
   res$marks <- as.data.frame(x$data[,5])[[1]]
+  
+  # 첫 번째를 제외한 간선에서는 루트와 가장 가까운 곳에 관측치가 있을 수 없다.
+  # 해당 관측치는 부모 간선 또는 첫 번째 간선으로 옮긴다.
+  is.head <- obs$tp == !visit$direction[obs$seg]
+  is.root <- is.head & visit$parent[obs$seg] == 0
+  obs$seg <- ifelse(is.root, -visit$queue[2], obs$seg)
+  obs$tp <- ifelse(is.root, 1 - visit$direction[-visit$queue[2]], obs$tp)
+  obs$seg <- ifelse(is.head & !is.root, visit$parent[obs$seg], obs$seg)
+  obs$tp <- ifelse(is.head & !is.root, 1 - visit$direction[obs$seg], obs$tp)
+  
   ## BFS에서 방문한 간선의 역순으로 관측치 나열하기
   ## <root>에서 멀리 떨어진 관측치일수록 앞에 온다.
-  for (i in 1:nrow(obs))
-    if (visit$direction[obs$seg[i]])
-      obs$tp[i] <- -obs$tp[i]
+  obs$tp <- ifelse(visit$direction[obs$seg], -obs$tp, obs$tp)
   obs <- obs[order(-order.e[obs$seg], obs$tp),]
   obs$tp <- abs(obs$tp)
+  is.head <- obs$tp == !visit$direction[obs$seg]
+  is.root <- is.head & visit$parent[obs$seg] == 0
+  is.tail <- obs$tp == visit$direction[obs$seg]
   res$parent <- rep(0L, nrow(x$data))
   ## 각 간선에서 <root>에 가장 가까운 관측치를 임시로 저장하는 큐
   ## <qi>는 obs index, <qp>는 parent의 edge index를 저장하며,
@@ -121,6 +132,9 @@ treeparty.build <- function(x, visit)
   qp <- rep(0L, nrow(obs))
   jf <- 1L
   jb <- 1L
+  # 가짜 관측치는 이미 while (jf < jb) 안에서 처리되기 때문에
+  # 외부 루프에서 고려하지 않는다.
+  # 루트에 관측치가 여러 개 있는 경우를 각별히 주의할 것.
   for (i in 1:(nrow(x$data) - 1))
   {
     idx <- obs$index[i]
@@ -129,12 +143,30 @@ treeparty.build <- function(x, visit)
       res$parent[idx] <- obs$index[i + 1]
       next
     }
+    if (is.root[i + 1])
+    {
+      # i번째 관측치와 i + 1번째 관측치는 다른 간선에 있으며,
+      # 두 간선이 부모-자식 관계에 있지 않음에도
+      # 두 관측치는 부모-자식 관계에 있다.
+      # 큐에 있던 모든 관측치는 자동으로 i + 1번째 관측치의 자식이 된다.
+      res$parent[idx] <- obs$index[i + 1]
+      while (jf < jb)
+      {
+        res$parent[qi[jf]] <- obs$index[i + 1]
+        jf <- jf + 1L
+      }
+    }
     qi[jb] <- idx
     qp[jb] <- visit$parent[obs$seg[i]]
-    #plot(x$domain$lines[qp[jb]], add = TRUE, col = "pink")
+    plot(x$domain$lines[qp[jb]], add = TRUE, col = "pink")
     jb <- jb + 1L
     while (jf < jb)
     {
+      ## qi[jf]번째 관측치가 속한 간선의 부모 간선이
+      ## i + 1번째 관측치가 속한 간선보다 <root>에 더 가깝다.
+      ## 이 경우, qi[jf]번째 관측치와 i + 1번째 관측치의 비교가 불가능하다.
+      if (qp[jf] == 0)
+        break
       if (order.e[qp[jf]] < order.e[obs$seg[i + 1]])
         break
       else if (qp[jf] == obs$seg[i + 1])
@@ -206,51 +238,66 @@ treeparty.build <- function(x, visit)
       }
     }
   }
-  ## 
+  
   i <- nrow(x$data)
-  idx <- obs$index[i]
-  qi[jb] <- idx
-  qp[jb] <- visit$parent[obs$seg[i]]
-  ##plot(x$domain$lines[qp[jb]], add = TRUE, col = "pink")
-  jb <- jb + 1L
-  while (jf < jb + 1)
+  if (is.root[i])
+    res$root <- obs$index[i]
+  else
   {
-    ##order.e[obs$seg[i + 1]] == -inf로 취급함
-    if (jb == jf + 1) ## 큐에 관측치가 하나뿐이면 루트
+    # 마지막 관측치는 곧바로 큐에 넣는다.
+    idx <- obs$index[i]
+    qi[jb] <- idx
+    qp[jb] <- ifelse(is.root[i], -1, visit$parent[obs$seg[i]])
+    ##plot(x$domain$lines[qp[jb]], add = TRUE, col = "pink")
+    jb <- jb + 1L
+    seg.root <- which.min(order.e)
+    tp.root <- 1 - visit$direction[parent.root]
+    while (jf < jb + 1)
     {
-      res$root <- qi[jf]
-      res$parent[res$root] <- 0L
-      break
-    }
-    else if (qp[jf] != qp[jf + 1])
-    {
-      qi[jb] <- qi[jf]
-      qp[jb] <- visit$parent[qp[jf]]
-      ##plot(x$domain$lines[qp[jb]], add = TRUE, col = "pink")
-      jf <- jf + 1L
-      jb <- jb + 1L
-    }
-    else
-    {
-      res$parent[length(res$parent) + 1] <- qp[jf] # 임시 데이터
-      res$obs[length(res$parent),] <- list(length(res$parent), qp[jf], visit$direction[qp[jf]] + 0)
-      while (jf < jb)
-        if (qp[jf] == res$parent[length(res$parent)])
-        {
-          res$parent[qi[jf]] <- length(res$parent)
-          jf <- jf + 1
-        }
+      ##order.e[obs$seg[i + 1]] == -inf로 취급함
+      if (jb == jf + 1) ## 큐에 관측치가 하나뿐이면 루트
+      {
+        res$root <- qi[jf]
+        res$parent[res$root] <- 0L
+        break
+      }
+      else if (qp[jf] != qp[jf + 1])
+      {
+        qi[jb] <- qi[jf]
+        qp[jb] <- visit$parent[qp[jf]]
+        ##plot(x$domain$lines[qp[jb]], add = TRUE, col = "pink")
+        jf <- jf + 1L
+        jb <- jb + 1L
+      }
+      else
+      {
+        res$parent[length(res$parent) + 1] <- qp[jf] # 임시 데이터
+        if (qp[jf] == 0)
+          res$obs[length(res$parent),] <- list(length(res$parent), seg.root, tp.root)
+        else
+          res$obs[length(res$parent),] <- list(length(res$parent), qp[jf], visit$direction[qp[jf]] + 0)
+        while (jf < jb)
+          if (qp[jf] == res$parent[length(res$parent)])
+          {
+            res$parent[qi[jf]] <- length(res$parent)
+            jf <- jf + 1
+          }
         else
           break
-      qi[jb] <- length(res$parent)
-      qp[jb] <- visit$parent[res$parent[length(res$parent)]]
-      res$parent[length(res$parent)] <- 0L
-      ##plot(x$domain$lines[qp[jb]], add = TRUE, col = "pink")
-      jb <- jb + 1
+        qi[jb] <- length(res$parent)
+        if (res$parent[length(res$parent)] == 0)
+          qp[jb] <- 0L
+        else
+          qp[jb] <- visit$parent[res$parent[length(res$parent)]]
+        res$parent[length(res$parent)] <- 0L
+        ##plot(x$domain$lines[qp[jb]], add = TRUE, col = "pink")
+        jb <- jb + 1
+      }
     }
   }
   res$order <- rep(0L, nrow(res$obs)) ## DFS를 통한 방문 순서
   res$invorder <- rep(0L, nrow(res$obs)) ## 의 역함수
+  res$duplicate <- rep(F, nrow(res$obs)) ## 부모와 좌표가 동일한가?
   is.branch <- rep(FALSE, nrow(res$obs))
   adjlist <- vector("list", nrow(res$obs)) ## 각 정점에 인접한 간선 목록
   for (i in 1:nrow(res$obs))
@@ -262,11 +309,11 @@ treeparty.build <- function(x, visit)
       next
     adjlist[[j]][1] <- adjlist[[j]][1] + 1L
     adjlist[[j]][adjlist[[j]][1]] <- i
+    res$duplicate[i] <- res$obs$seg[i] == res$obs$seg[j] & res$obs$tp[i] == res$obs$tp[j]
   }
   jt <- 1L
   jb <- nrow(res$obs)
   res$order[1] <- res$root
-  
   
   while (jt > 0)
   {
@@ -299,6 +346,7 @@ treeparty.build <- function(x, visit)
         stop("!")
     }
   }
+  
   res$subtree.size <- rep(1L, nrow(res$obs))
   for (i in res$order[nrow(res$obs):2])
     res$subtree.size[res$parent[i]] <- res$subtree.size[res$parent[i]] + res$subtree.size[i]
@@ -323,6 +371,7 @@ treeparty.count <- function(build, weight = rep(1, length(build$marks)))
   colnames(res$count) <- res$labels
   res$root <- build$root
   res$obs <- sum(res$count[res$root,])
+  res$duplicate <- build$duplicate
   class(res) <- "treeparty.count"
   return(res)
 }
@@ -357,6 +406,7 @@ treeparty.count <- function(build, weight = rep(1, length(build$marks)))
 ## 관측치 트리에 대해 결정 트리를 생성한다.
 ## 데이터셋을 분할하는 기준을 변경할 경우, split부터 다시 수행해야 한다.
 ## 개선 사항 : accuracy와 gini에 한해, apply 함수를 사용하여 계산 속도를 높였다.
+## duplicate가 TRUE일 경우, 해당 지점에서 분류할 수 없다.
 treeparty.split <- function(count, minbucket = 30, eval = "accuracy", significance = 0.01)
 {
   if (class(count) != "treeparty.count")
@@ -392,7 +442,7 @@ treeparty.split <- function(count, minbucket = 30, eval = "accuracy", significan
   {
     checked <- 0
     max.stat <- 0
-    for (i in 1:nrow(count$count))
+    for (i in !count$duplicate)
     {
       test.stat <- 0
       subtree <- sum(count$count[i,])
@@ -433,6 +483,7 @@ treeparty.split <- function(count, minbucket = 30, eval = "accuracy", significan
     remaining <- rep(as.vector(unlist(count$count[count$root,])), each = nrow(count$count)) - count$count
     
     test.stats <- apply(count$count, 1, max) + apply(remaining, 1, max)
+    test.stats <- ifelse(count$duplicate, 0, test.stats)
     max.stat <- max(test.stats)
     res$root <- which.max(test.stats)
     res$accuracy <- max.stat / count$obs
@@ -449,6 +500,7 @@ treeparty.split <- function(count, minbucket = 30, eval = "accuracy", significan
     test2 <- rep(as.vector(unlist(count$count[count$root,])), each = nrow(count$count)) - count$count
     test2 <- apply(test2 ^ 2, 1, sum) / apply(test2, 1, sum)
     test.stats <- test1 + test2
+    test.stats <- ifelse(count$duplicate, 0, test.stats)
     
     max.stat <- max(test.stats, na.rm = T)
     res$root <- which.max(test.stats)
@@ -470,6 +522,7 @@ treeparty.split <- function(count, minbucket = 30, eval = "accuracy", significan
     prop <- test2 / sum2
     test2 <- apply(prop * log(prop), 1, sum, na.rm = T)
     test.stats <- -(test1 * sum1 + test2 * sum2)
+    test.stats <- ifelse(count$duplicate, 0, test.stats)
     
     min.stat <- min(test.stats, na.rm = T)
     res$root <- which.min(test.stats)

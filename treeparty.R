@@ -158,7 +158,7 @@ treeparty.build <- function(x, visit)
     }
     qi[jb] <- idx
     qp[jb] <- visit$parent[obs$seg[i]]
-    plot(x$domain$lines[qp[jb]], add = TRUE, col = "pink")
+    #plot(x$domain$lines[qp[jb]], add = TRUE, col = "pink")
     jb <- jb + 1L
     while (jf < jb)
     {
@@ -499,7 +499,7 @@ treeparty.split <- function(count, minbucket = 30, eval = "accuracy", significan
     prop <- test2 / sum2
     test2 <- apply(prop * log(prop), 1, sum, na.rm = T)
     test.stats <- -(test1 * sum1 + test2 * sum2)
-    test.stats <- ifelse(count$duplicate, 0, test.stats)
+    test.stats <- ifelse(count$duplicate, max(test.stats) + 1, test.stats)
     
     min.stat <- min(test.stats, na.rm = T)
     res$root <- which.min(test.stats)

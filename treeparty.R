@@ -577,7 +577,7 @@ treeparty.decision <- function(build, weight = rep(1, length(build$marks)), minb
 {
   counted <- treeparty.count(build, weight)
   if (depth <= 0)
-    minbucket <- sum(weight) + 1
+    minbucket <- nrow(build$obs) + 1
   split <- treeparty.split(counted, minbucket, eval, significance)
   if (!is.na(split$pred))
     return(split)

@@ -251,7 +251,7 @@ treeparty.build <- function(x, visit)
     ##plot(x$domain$lines[qp[jb]], add = TRUE, col = "pink")
     jb <- jb + 1L
     seg.root <- which.min(order.e)
-    tp.root <- 1 - visit$direction[parent.root]
+    tp.root <- 1 - visit$direction[seg.root]
     while (jf < jb + 1)
     {
       ##order.e[obs$seg[i + 1]] == -inf로 취급함
@@ -370,38 +370,15 @@ treeparty.count <- function(build, weight = rep(1, length(build$marks)))
   res$count <- data.frame(treeparty_count(as.integer(build$marks), length(res$labels), build$order, build$parent, weight)) # use Rcpp
   colnames(res$count) <- res$labels
   res$root <- build$root
-  res$obs <- sum(res$count[res$root,])
+  res$obs <- 0
+  res$sum.weight <- sum(res$count[res$root,])
   res$duplicate <- build$duplicate
+  res$duplicate[weight == 0] <- T
+  res$obs <- sum(!res$duplicate)
+  # 가중치가 0인 관측치도 duplicate로 처리
   class(res) <- "treeparty.count"
   return(res)
 }
-
-## legacy version
-#treeparty.count.R <- function(build, weight = rep(1, length(build$marks)))
-#{
-#  if (class(build) != "treeparty.build")
-#    stop("[build] should be a 'treeparty.build' object.")
-#  ## 데이터 트리에서 각 관측치 정점을 루트로 하는 서브트리에 대해
-#  ## 종류별 관측치의 가중치 합 카운트
-#  res <- list()
-#  res$labels <- as.factor(levels(build$marks))
-#  res$count <- data.frame(matrix(0, length(build$order), length(res$labels)))
-#  colnames(res$count) <- res$labels
-#  ## 현재 가장 느린 부분으로, R에서 for문 실행 속도가 느린 것으로 판단된다.
-#  ## 만약 C++로 짤 수 있다면?
-#  marks <- as.integer(build$marks)
-#  for (i in 1:length(build$marks))
-#  {
-#    label <- marks[i]
-#    res$count[i, label] <- weight[i]
-#  }
-#  for (i in length(build$order):2)
-#    res$count[build$parent[build$order[i]],] <- res$count[build$parent[build$order[i]],] + res$count[build$order[i],]
-#  res$root <- build$root
-#  res$obs <- sum(res$count[res$root,])
-#  class(res) <- "treeparty.count"
-#  return(res)
-#}
 
 ## 관측치 트리에 대해 결정 트리를 생성한다.
 ## 데이터셋을 분할하는 기준을 변경할 경우, split부터 다시 수행해야 한다.
@@ -446,11 +423,11 @@ treeparty.split <- function(count, minbucket = 30, eval = "accuracy", significan
     {
       test.stat <- 0
       subtree <- sum(count$count[i,])
-      if (subtree == 0 || subtree == count$obs)
+      if (subtree == 0 || subtree == count$sum.weight)
         next
       for (j in 1:length(count$count))
       {
-        expected <- subtree * count$count[count$root, j] / count$obs
+        expected <- subtree * count$count[count$root, j] / count$sum.weight
         test.stat <- test.stat + (count$count[i, j] - expected) ^ 2 / expected
         expected <- count$count[count$root, j] - expected
         test.stat <- test.stat + (count$count[count$root, j] - count$count[i, j] - expected) ^ 2 / expected
@@ -486,7 +463,7 @@ treeparty.split <- function(count, minbucket = 30, eval = "accuracy", significan
     test.stats <- ifelse(count$duplicate, 0, test.stats)
     max.stat <- max(test.stats)
     res$root <- which.max(test.stats)
-    res$accuracy <- max.stat / count$obs
+    res$accuracy <- max.stat / count$sum.weight
     res$pred.sub <- count$labels[which.max(count$count[res$root,])]
     suptree <- count$count[count$root,] - count$count[res$root,]
     res$pred.sup <- count$labels[which.max(suptree)]
@@ -504,7 +481,7 @@ treeparty.split <- function(count, minbucket = 30, eval = "accuracy", significan
     
     max.stat <- max(test.stats, na.rm = T)
     res$root <- which.max(test.stats)
-    res$impurity <- 1 - max.stat / count$obs
+    res$impurity <- 1 - max.stat / count$sum.weight
     
     res$pred.sub <- count$labels[which.max(count$count[res$root,])]
     suptree <- count$count[count$root,] - count$count[res$root,]
@@ -513,7 +490,7 @@ treeparty.split <- function(count, minbucket = 30, eval = "accuracy", significan
   else if (eval == "entropy")
   {
     checked <- 0
-    min.stat <- count$obs
+    min.stat <- count$sum.weight
     sum1 <- apply(count$count, 1, sum)
     prop <- count$count / sum1
     test1 <- apply(prop * log(prop), 1, sum, na.rm = T)
@@ -526,7 +503,7 @@ treeparty.split <- function(count, minbucket = 30, eval = "accuracy", significan
     
     min.stat <- min(test.stats, na.rm = T)
     res$root <- which.min(test.stats)
-    res$impurity <- min.stat / count$obs
+    res$impurity <- min.stat / count$sum.weight
     
     res$pred.sub <- count$labels[which.max(count$count[res$root,])]
     suptree <- count$count[count$root,] - count$count[res$root,]

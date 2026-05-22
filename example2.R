@@ -97,7 +97,7 @@ for (seed in seed.min:seed.max)
     if (i < 396 || seed < seed.max)
       print((Sys.time() - starttime) * (396 - i + (seed.max - seed) * 396) / (i + (seed - seed.min) * 396))
   }
-  write.csv(correct.Euclidean, paste("treeparty.", eval, ".csv", sep = ""))
+  write.csv(correct.treeparty, paste("treeparty.", eval, ".csv", sep = ""))
   
   y <- X$data$marks
   x <- data.frame(x = X$data$x, y = X$data$y)

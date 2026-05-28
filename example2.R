@@ -1,5 +1,21 @@
+MUTATEMORE = F
+JUNCTION1.5 = F
+ROTATE45 = F
+
+
 ## sample 2 : maze
-v <- ppp(x = rep(1:10, 10), y = rep(1:10, each = 10), c(0, 11), c(0, 11))
+set.seed(18)
+vx <- rep(0:9, 10)
+vy <- rep(0:9, each = 10)
+if (MUTATEMORE)
+{
+  vx <- vx + runif(100)
+  vy <- vy + runif(100)
+}
+if (ROTATE45)
+  v <- ppp(x = vx - vy, y = vx + vy, c(-10, 10), c(0, 20))
+if (!ROTATE45)
+  v <- ppp(vx, vy, c(0, 10), c(0, 10))
 edge <- matrix(c(1:99,
                  2, 12, 2, 5, 15, 5, 6, 7, 19, 9, 
                  12, 13, 14, 4, 25, 17, 18, 19, 29, 10, 
@@ -26,21 +42,42 @@ mainroute <- c(1, 2, 4, 5,
 junction <- c(2, 5, 12, 15, 25, 24, 44, 32, 62,
               65, 57, 37, 19, 49, 82, 94, 98)
 
-set.seed(88)
 X <- runiflpp(n = 396, L = maze, nsim = 1)
 X$data <- cbind(X$data, marks = sapply(X$data$seg, function(x) ifelse(x %in% mainroute, "main", "sub")))
-fromjunction <- sapply(X$data$seg, function(x) x %in% junction)
-tojunction <- sapply(X$domain$to[X$data$seg], function(x) x %in% junction)
-mutation <- (1 - X$data$tp) * fromjunction + X$data$tp * tojunction
-X$data$marks[runif(396) < mutation] <- "junction"
+
+mutation <- rep(0, 396)
+
+for (j in junction)
+{
+  jx <- v$x[j]
+  jy <- v$y[j]
+  if (ROTATE45)
+    for (i in 1:396)
+      mutation[i] <- mutation[i] + max(0, 1 - sqrt(((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 2))
+  else
+    for (i in 1:396)
+      mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2))
+}
+
+if (JUNCTION1.5)
+  X$data$marks[runif(396) < mutation * 1.5] <- "junction"
+if (!JUNCTION1.5)
+  X$data$marks[runif(396) < mutation] <- "junction"
 
 X$data$marks <- factor(X$data$marks, c("main", "sub", "junction"))
+if (MUTATEMORE)
+{
+  noise <- sample(1:99, 5)
+  X.noise <- X$data$seg %in% noise
+  X$data$marks[X.noise] <- levels(X$data$marks)[as.integer(runif(sum(X.noise), 1, 4))]
+}
 X$ctype <- c(X$ctype, as.factor("mark"))
+table(X$data$marks)
 
 png("maze.png", 480, 400)
 par(mar = c(0, 2, 0, 0))
 par(cex = 2)
-plot.lpp(X, main = "")
+plot(X, main = "")
 dev.off()
 
 seed.min <- 1L
@@ -60,15 +97,39 @@ starttime <- Sys.time()
 for (seed in seed.min:seed.max)
 {
   set.seed(seed)
+  vx <- rep(0:9, 10)
+  vy <- rep(0:9, each = 10)
+  if (MUTATEMORE)
+  {
+    vx <- vx + runif(100)
+    vy <- vy + runif(100)
+  }
+  if (ROTATE45)
+    v <- ppp(x = vx - vy, y = vx + vy, c(-10, 10), c(0, 20))
+  if (!ROTATE45)
+    v <- ppp(vx, vy, c(0, 10), c(0, 10))
+  maze <- linnet(v, edges = edge)
   X <- runiflpp(n = 396, L = maze, nsim = 1)
   X$data <- cbind(X$data, marks = sapply(X$data$seg, function(x) ifelse(x %in% mainroute, "main", "sub")))
-  fromjunction <- sapply(X$data$seg, function(x) x %in% junction)
-  tojunction <- sapply(X$domain$to[X$data$seg], function(x) x %in% junction)
-  mutation <- (1 - X$data$tp) * fromjunction + X$data$tp * tojunction
+  mutation <- rep(0, 396)
+  for (j in junction)
+  {
+    jx <- v$x[j]
+    jy <- v$y[j]
+    for (i in 1:396)
+      mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 1)
+  }
   X$data$marks[runif(396) < mutation] <- "junction"
-  X$data$marks <- as.factor(X$data$marks)
+  X$data$marks <- factor(X$data$marks, c("main", "sub", "junction"))
+  if (MUTATEMORE)
+  {
+    noise <- sample(1:99, 5)
+    X.noise <- X$data$seg %in% noise
+      X$data$marks[X.noise] <- levels(X$data$marks)[as.integer(runif(sum(X.noise), 1, 4))]
+  }
   X$ctype <- c(X$ctype, as.factor("mark"))
-  plot(X, main = paste("Seed", as.character(seed)))
+  tb <- table(X$data$marks)
+  plot(X, main = paste("Seed", as.character(seed)), cex = 2)
   
   ## Leave-one-out cross validation for treeparty.adaboost
   
@@ -98,6 +159,7 @@ for (seed in seed.min:seed.max)
       print((Sys.time() - starttime) * (396 - i + (seed.max - seed) * 396) / (i + (seed - seed.min) * 396))
   }
   write.csv(correct.treeparty, paste("treeparty.", eval, ".csv", sep = ""))
+  next
   
   y <- X$data$marks
   x <- data.frame(x = X$data$x, y = X$data$y)
@@ -131,18 +193,44 @@ starttime <- Sys.time()
 for (seed in seed.min:seed.max)
 {
   set.seed(seed)
+  vx <- rep(0:9, 10)
+  vy <- rep(0:9, each = 10)
+  if (MUTATEMORE)
+  {
+    vx <- vx + runif(100)
+    vy <- vy + runif(100)
+  }
+  if (ROTATE45)
+    v <- ppp(x = vx - vy, y = vx + vy, c(-10, 10), c(0, 20))
+  if (!ROTATE45)
+    v <- ppp(vx, vy, c(0, 10), c(0, 10))
+  maze <- linnet(v, edges = edge)
   X <- runiflpp(n = 396, L = maze, nsim = 1)
   X$data <- cbind(X$data, marks = sapply(X$data$seg, function(x) ifelse(x %in% mainroute, "main", "sub")))
-  fromjunction <- sapply(X$data$seg, function(x) x %in% junction)
-  tojunction <- sapply(X$domain$to[X$data$seg], function(x) x %in% junction)
-  mutation <- (1 - X$data$tp) * fromjunction + X$data$tp * tojunction
+  mutation <- rep(0, 396)
+  for (j in junction)
+  {
+    jx <- v$x[j]
+    jy <- v$y[j]
+    for (i in 1:396)
+      mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 1)
+  }
   X$data$marks[runif(396) < mutation] <- "junction"
-  X$data$marks <- as.factor(X$data$marks)
+  X$data$marks <- factor(X$data$marks, c("main", "sub", "junction"))
+  if (MUTATEMORE)
+  {
+    noise <- sample(1:99, 5)
+    X.noise <- X$data$seg %in% noise
+    X$data$marks[X.noise] <- levels(X$data$marks)[as.integer(runif(sum(X.noise), 1, 4))]
+  }
   X$ctype <- c(X$ctype, as.factor("mark"))
-  plot(X, main = paste("Seed", as.character(seed)))
+  tb <- table(X$data$marks)
+  folds <- rep(1, 396)
+  for (i in 1:3)
+    folds[X$data$marks == names(tb[i])] <- as.integer((order(runif(tb[i])) - 1) / tb[i] * 5) + 1
+  plot(X, main = paste("Seed", as.character(seed)), cex = 2)
   
   ## Leave-one-out cross validation for treeparty.adaboost
-  
   
   y <- X$data$marks
   x <- data.frame(x = X$data$x, y = X$data$y)
@@ -173,13 +261,36 @@ correct.Euclidean <- matrix(0L, seed.max, iter)
 for (seed in seed.min:seed.max)
 {
   set.seed(seed)
+  vx <- rep(0:9, 10)
+  vy <- rep(0:9, each = 10)
+  if (MUTATEMORE)
+  {
+    vx <- vx + runif(100)
+    vy <- vy + runif(100)
+  }
+  if (ROTATE45)
+    v <- ppp(x = vx - vy, y = vx + vy, c(-10, 10), c(0, 20))
+  if (!ROTATE45)
+    v <- ppp(vx, vy, c(0, 10), c(0, 10))
+  maze <- linnet(v, edges = edge)
   X <- runiflpp(n = 396, L = maze, nsim = 1)
   X$data <- cbind(X$data, marks = sapply(X$data$seg, function(x) ifelse(x %in% mainroute, "main", "sub")))
-  fromjunction <- sapply(X$data$seg, function(x) x %in% junction)
-  tojunction <- sapply(X$domain$to[X$data$seg], function(x) x %in% junction)
-  mutation <- (1 - X$data$tp) * fromjunction + X$data$tp * tojunction
+  mutation <- rep(0, 396)
+  for (j in junction)
+  {
+    jx <- v$x[j]
+    jy <- v$y[j]
+    for (i in 1:396)
+      mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 1)
+  }
   X$data$marks[runif(396) < mutation] <- "junction"
-  X$data$marks <- as.factor(X$data$marks)
+  X$data$marks <- factor(X$data$marks, c("main", "sub", "junction"))
+  if (MUTATEMORE)
+  {
+    noise <- sample(1:99, 5)
+    X.noise <- X$data$seg %in% noise
+    X$data$marks[X.noise] <- levels(X$data$marks)[as.integer(runif(sum(X.noise), 1, 4))]
+  }
   X$ctype <- c(X$ctype, as.factor("mark"))
   tb <- table(X$data$marks)
   folds <- rep(1, 396)
@@ -231,8 +342,67 @@ for (seed in seed.min:seed.max)
     }
     cat(i, "/", 5, '\n')
   }
-  write.csv(correct.Euclidean, paste("Euclidean5.", eval, ".csv"))
+  write.csv(correct.Euclidean, paste("Euclidean5.", eval, ".csv", sep = ""))
 }
+}
+seed.min <- 1L
+seed.max <- 100L
+iter <- 20L
+correct.knn <- matrix(0, seed.max, iter)
+starttime <- Sys.time()
+for (seed in seed.min:seed.max)
+{
+  set.seed(seed)
+  vx <- rep(0:9, 10)
+  vy <- rep(0:9, each = 10)
+  if (MUTATEMORE)
+  {
+    vx <- vx + runif(100)
+    vy <- vy + runif(100)
+  }
+  if (ROTATE45)
+    v <- ppp(x = vx - vy, y = vx + vy, c(-10, 10), c(0, 20))
+  if (!ROTATE45)
+    v <- ppp(vx, vy, c(0, 10), c(0, 10))
+  maze <- linnet(v, edges = edge)
+  X <- runiflpp(n = 396, L = maze, nsim = 1)
+  X$data <- cbind(X$data, marks = sapply(X$data$seg, function(x) ifelse(x %in% mainroute, "main", "sub")))
+  mutation <- rep(0, 396)
+  for (j in junction)
+  {
+    jx <- v$x[j]
+    jy <- v$y[j]
+    for (i in 1:396)
+      mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 1)
+  }
+  X$data$marks[runif(396) < mutation] <- "junction"
+  X$data$marks <- factor(X$data$marks, c("main", "sub", "junction"))
+  if (MUTATEMORE)
+  {
+    noise <- sample(1:99, 5)
+    X.noise <- X$data$seg %in% noise
+    X$data$marks[X.noise] <- levels(X$data$marks)[as.integer(runif(sum(X.noise), 1, 4))]
+  }
+  X$ctype <- c(X$ctype, as.factor("mark"))
+  tb <- table(X$data$marks)
+  folds <- rep(1, 396)
+  for (i in 1:3)
+    folds[X$data$marks == names(tb[i])] <- as.integer((order(runif(tb[i])) - 1) / tb[i] * 5) + 1
+  plot(X, main = paste("Seed", as.character(seed)), cex = 2)
+  
+  ## Leave-one-out cross validation for treeparty.adaboost
+  
+  y <- X$data$marks
+  x <- data.frame(x = X$data$x, y = X$data$y)
+  
+  labels <- levels(y)
+  for (i in 1:5)
+  {
+    for (it in 1L:iter)
+      correct.knn[seed, it] <- correct.knn[seed, it] + sum(knn(x[folds != i,], x[folds == i,], y[folds != i], it) == y[folds == i])
+    cat(i, "/", 5, '\n')
+  }
+  write.csv(correct.knn, "knn5.csv")
 }
 
 
@@ -250,13 +420,41 @@ correct.Euclidean <- matrix(0L, seed.max, iter)
 for (seed in seed.min:seed.max)
 {
   set.seed(seed)
+  vx <- rep(0:9, 10)
+  vy <- rep(0:9, each = 10)
+  if (MUTATEMORE)
+    
+    set.seed(seed)
+  vx <- rep(0:9, 10)
+  vy <- rep(0:9, each = 10)
+  if (MUTATEMORE)
+  {
+    vx <- vx + runif(100)
+    vy <- vy + runif(100)
+  }
+  if (ROTATE45)
+    v <- ppp(x = vx - vy, y = vx + vy, c(-10, 10), c(0, 20))
+  if (!ROTATE45)
+    v <- ppp(vx, vy, c(0, 10), c(0, 10))
+  maze <- linnet(v, edges = edge)
   X <- runiflpp(n = 396, L = maze, nsim = 1)
   X$data <- cbind(X$data, marks = sapply(X$data$seg, function(x) ifelse(x %in% mainroute, "main", "sub")))
-  fromjunction <- sapply(X$data$seg, function(x) x %in% junction)
-  tojunction <- sapply(X$domain$to[X$data$seg], function(x) x %in% junction)
-  mutation <- (1 - X$data$tp) * fromjunction + X$data$tp * tojunction
+  mutation <- rep(0, 396)
+  for (j in junction)
+  {
+    jx <- v$x[j]
+    jy <- v$y[j]
+    for (i in 1:396)
+      mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 1)
+  }
   X$data$marks[runif(396) < mutation] <- "junction"
-  X$data$marks <- as.factor(X$data$marks)
+  X$data$marks <- factor(X$data$marks, c("main", "sub", "junction"))
+  if (MUTATEMORE)
+  {
+    noise <- sample(1:99, 5)
+    X.noise <- X$data$seg %in% noise
+    X$data$marks[X.noise] <- levels(X$data$marks)[as.integer(runif(sum(X.noise), 1, 4))]
+  }
   X$ctype <- c(X$ctype, as.factor("mark"))
   tb <- table(X$data$marks)
   folds <- rep(1, 396)
@@ -287,7 +485,8 @@ for (seed in seed.min:seed.max)
     }
     cat(i, "/", 10, '\n')
   }
-  write.csv(correct.treeparty, paste("treeparty10.", eval, ".csv", sep = ""))
+  next
+  write.csv(correct.treeparty, paste("treeparty10.5.", eval, ".csv", sep = ""))
   y <- X$data$marks
   x <- data.frame(x = X$data$x, y = X$data$y)
   
@@ -308,23 +507,46 @@ for (seed in seed.min:seed.max)
     }
     cat(i, "/", 10, '\n')
   }
-  write.csv(correct.Euclidean, paste("Euclidean10.", eval, ".csv"))
+  write.csv(correct.Euclidean, paste("Euclidean10.", eval, ".csv", sep = ""))
 }
 }
 
 
-## 88번 시드 재현
+## 18번 시드 재현
 
-seed <- 88
-iter <- 67
-set.seed(88)
+seed <- 18
+iter <- 100
+set.seed(seed)
+vx <- rep(0:9, 10)
+vy <- rep(0:9, each = 10)
+if (MUTATEMORE)
+{
+  vx <- vx + runif(100)
+  vy <- vy + runif(100)
+}
+if (ROTATE45)
+  v <- ppp(x = vx - vy, y = vx + vy, c(-10, 10), c(0, 20))
+if (!ROTATE45)
+  v <- ppp(vx, vy, c(0, 10), c(0, 10))
+maze <- linnet(v, edges = edge)
 X <- runiflpp(n = 396, L = maze, nsim = 1)
 X$data <- cbind(X$data, marks = sapply(X$data$seg, function(x) ifelse(x %in% mainroute, "main", "sub")))
-fromjunction <- sapply(X$data$seg, function(x) x %in% junction)
-tojunction <- sapply(X$domain$to[X$data$seg], function(x) x %in% junction)
-mutation <- (1 - X$data$tp) * fromjunction + X$data$tp * tojunction
+mutation <- rep(0, 396)
+for (j in junction)
+{
+  jx <- v$x[j]
+  jy <- v$y[j]
+  for (i in 1:396)
+    mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 1)
+}
 X$data$marks[runif(396) < mutation] <- "junction"
-X$data$marks <- as.factor(X$data$marks)
+X$data$marks <- factor(X$data$marks, c("main", "sub", "junction"))
+if (MUTATEMORE)
+{
+  noise <- sample(1:99, 5)
+  X.noise <- X$data$seg %in% noise
+  X$data$marks[X.noise] <- levels(X$data$marks)[as.integer(runif(sum(X.noise), 1, 4))]
+}
 X$ctype <- c(X$ctype, as.factor("mark"))
 plot(X, main = paste("Seed", as.character(seed)))
 
@@ -397,9 +619,87 @@ Xpred <- X
 Xpred$data$marks <- pred.Euclidean
 X.wrong <- Xpred
 X.wrong$data <- Xpred$data[built$marks != pred.Euclidean]
-png("maze.Euclidean.png", 480, 400)
+png("maze.Euclidean.accuracy.png", 480, 400)
 par(mar = c(0, 0, 5, 0))
 par(cex = 1)
-plot(Xpred, cex = 3, cols = "pink", main = "(c) Comparison: gini")
+plot(Xpred, cex = 3, cols = "pink", main = "(b) Comparison: MR")
 plot(X.wrong, add = T, cols = "black", cex = 3)
 dev.off()
+
+sum.tb <- c(0L, 0L, 0L)
+
+## counting the sample observations
+for (seed in seed.min:seed.max)
+{
+  set.seed(seed)
+  vx <- rep(0:9, 10)
+  vy <- rep(0:9, each = 10)
+  if (MUTATEMORE)
+  {
+    vx <- vx + runif(100)
+    vy <- vy + runif(100)
+  }
+  if (ROTATE45)
+    v <- ppp(x = vx - vy, y = vx + vy, c(-10, 10), c(0, 20))
+  if (!ROTATE45)
+    v <- ppp(vx, vy, c(0, 10), c(0, 10))
+  maze <- linnet(v, edges = edge)
+  X <- runiflpp(n = 396, L = maze, nsim = 1)
+  X$data <- cbind(X$data, marks = sapply(X$data$seg, function(x) ifelse(x %in% mainroute, "main", "sub")))
+  mutation <- rep(0, 396)
+  for (j in junction)
+  {
+    jx <- v$x[j]
+    jy <- v$y[j]
+    for (i in 1:396)
+      mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 1)
+  }
+  X$data$marks[runif(396) < mutation] <- "junction"
+  X$data$marks <- factor(X$data$marks, c("main", "sub", "junction"))
+  if (MUTATEMORE)
+  {
+    noise <- sample(1:99, 5)
+    X.noise <- X$data$seg %in% noise
+    X$data$marks[X.noise] <- levels(X$data$marks)[as.integer(runif(sum(X.noise), 1, 4))]
+  }
+  X$ctype <- c(X$ctype, as.factor("mark"))
+  tb <- table(X$data$marks)
+  sum.tb <- sum.tb + tb
+}
+print(sum.tb)
+
+
+set.seed(seed <- 18)
+vx <- rep(0:9, 10)
+vy <- rep(0:9, each = 10)
+if (MUTATEMORE)
+{
+  vx <- vx + runif(100)
+  vy <- vy + runif(100)
+}
+if (ROTATE45)
+  v <- ppp(x = vx - vy, y = vx + vy, c(-10, 10), c(0, 20))
+if (!ROTATE45)
+  v <- ppp(vx, vy, c(0, 10), c(0, 10))
+maze <- linnet(v, edges = edge)
+X <- runiflpp(n = 396, L = maze, nsim = 1)
+X$data <- cbind(X$data, marks = sapply(X$data$seg, function(x) ifelse(x %in% mainroute, "main", "sub")))
+mutation <- rep(0, 396)
+for (j in junction)
+{
+  jx <- v$x[j]
+  jy <- v$y[j]
+  for (i in 1:396)
+    mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 1)
+}
+X$data$marks[runif(396) < mutation] <- "junction"
+X$data$marks <- factor(X$data$marks, c("main", "sub", "junction"))
+if (MUTATEMORE)
+{
+  noise <- sample(1:99, 5)
+  X.noise <- X$data$seg %in% noise
+  X$data$marks[X.noise] <- levels(X$data$marks)[as.integer(runif(sum(X.noise), 1, 4))]
+}
+X$ctype <- c(X$ctype, as.factor("mark"))
+tb <- table(X$data$marks)
+plot(X, main = paste("Seed", as.character(seed)), cex = 2)

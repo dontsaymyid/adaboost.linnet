@@ -1,10 +1,13 @@
 MUTATEMORE = F
-JUNCTION1.5 = F
-ROTATE45 = F
 
+N = 396L
+
+seed.min <- 1L
+seed.max <- 100L
+iter <- 100L
 
 ## sample 2 : maze
-set.seed(18)
+set.seed(29)
 vx <- rep(0:9, 10)
 vy <- rep(0:9, each = 10)
 if (MUTATEMORE)
@@ -42,27 +45,16 @@ mainroute <- c(1, 2, 4, 5,
 junction <- c(2, 5, 12, 15, 25, 24, 44, 32, 62,
               65, 57, 37, 19, 49, 82, 94, 98)
 
-X <- runiflpp(n = 396, L = maze, nsim = 1)
+X <- runiflpp(n = N, L = maze, nsim = 1)
 X$data <- cbind(X$data, marks = sapply(X$data$seg, function(x) ifelse(x %in% mainroute, "main", "sub")))
 
-mutation <- rep(0, 396)
+mutation <- rep(0, N)
 
 for (j in junction)
 {
   jx <- v$x[j]
   jy <- v$y[j]
-  if (ROTATE45)
-    for (i in 1:396)
-      mutation[i] <- mutation[i] + max(0, 1 - sqrt(((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 2))
-  else
-    for (i in 1:396)
-      mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2))
 }
-
-if (JUNCTION1.5)
-  X$data$marks[runif(396) < mutation * 1.5] <- "junction"
-if (!JUNCTION1.5)
-  X$data$marks[runif(396) < mutation] <- "junction"
 
 X$data$marks <- factor(X$data$marks, c("main", "sub", "junction"))
 if (MUTATEMORE)
@@ -88,7 +80,7 @@ evals <- c("accuracy", "gini", "entropy")
 ## correct.*  : for proposed
 ## correct2.* : for comparison
 
-for (eval in evals)
+for (eval in evals[-1])
 {
 correct.treeparty <- matrix(0L, seed.max, iter)
 correct.Euclidean <- matrix(0L, seed.max, iter)
@@ -104,22 +96,16 @@ for (seed in seed.min:seed.max)
     vx <- vx + runif(100)
     vy <- vy + runif(100)
   }
-  if (ROTATE45)
-    v <- ppp(x = vx - vy, y = vx + vy, c(-10, 10), c(0, 20))
-  if (!ROTATE45)
-    v <- ppp(vx, vy, c(0, 10), c(0, 10))
   maze <- linnet(v, edges = edge)
-  X <- runiflpp(n = 396, L = maze, nsim = 1)
+  X <- runiflpp(n = N, L = maze, nsim = 1)
   X$data <- cbind(X$data, marks = sapply(X$data$seg, function(x) ifelse(x %in% mainroute, "main", "sub")))
-  mutation <- rep(0, 396)
+  mutation <- rep(0, N)
   for (j in junction)
   {
     jx <- v$x[j]
     jy <- v$y[j]
-    for (i in 1:396)
-      mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 1)
   }
-  X$data$marks[runif(396) < mutation] <- "junction"
+  X$data$marks[runif(N) < mutation] <- "junction"
   X$data$marks <- factor(X$data$marks, c("main", "sub", "junction"))
   if (MUTATEMORE)
   {
@@ -130,9 +116,7 @@ for (seed in seed.min:seed.max)
   X$ctype <- c(X$ctype, as.factor("mark"))
   tb <- table(X$data$marks)
   plot(X, main = paste("Seed", as.character(seed)), cex = 2)
-  
   ## Leave-one-out cross validation for treeparty.adaboost
-  
   visited <- treeparty.visit(X)
   built <- treeparty.build(X, visited)
   labels <- levels(built$marks)
@@ -154,13 +138,14 @@ for (seed in seed.min:seed.max)
       if (pred == as.integer(built$marks[i]))
         correct.treeparty[seed, it] <- correct.treeparty[seed, it] + 1L
     }
-    #cat(i, "/", 396, '\n')
-    if (i < 396 || seed < seed.max)
-      print((Sys.time() - starttime) * (396 - i + (seed.max - seed) * 396) / (i + (seed - seed.min) * 396))
+    #cat(i, "/", N, '\n')
+    if (i < N || seed < seed.max)
+      print((Sys.time() - starttime) * (N - i + (seed.max - seed) * N) / (i + (seed - seed.min) * N))
   }
-  write.csv(correct.treeparty, paste("treeparty.", eval, ".csv", sep = ""))
-  next
-  
+  if (MUTATEMORE)
+    write.csv(correct.treeparty, paste("treepartyC.", eval, ".csv", sep = ""))
+  else
+    write.csv(correct.treeparty, paste("treeparty.", eval, ".csv", sep = ""))
   y <- X$data$marks
   x <- data.frame(x = X$data$x, y = X$data$y)
   
@@ -178,17 +163,27 @@ for (seed in seed.min:seed.max)
       if (pred == as.integer(y[i]))
         correct.Euclidean[seed, it] <- correct.Euclidean[seed, it] + 1L
     }
-    if (i < 396 || seed < seed.max)
-      print((Sys.time() - starttime) * (396 - i + (seed.max - seed) * 396) / (i + (seed - seed.min) * 396))
+    if (i < N || seed < seed.max)
+      print((Sys.time() - starttime) * (N - i + (seed.max - seed) * N) / (i + (seed - seed.min) * N))
   }
-  write.csv(correct.Euclidean, paste("Euclidean.", eval, ".csv", sep = ""))
+  if (MUTATEMORE)
+    write.csv(correct.Euclidean, paste("EuclideanC.", eval, ".csv", sep = ""))
+  else
+    write.csv(correct.Euclidean, paste("Euclidean.", eval, ".csv", sep = ""))
 }
 }
+
+seed
+correct.treeparty[seed,] <- 0L
+seed.min <- seed
+correct.treeparty[,1:2]
 
 seed.min <- 1L
 seed.max <- 100L
 iter <- 20L
 correct.knn <- matrix(0, seed.max, iter)
+correct.rf <- rep(0, seed.max)
+correct.ik <- rep(0, seed.max)
 starttime <- Sys.time()
 for (seed in seed.min:seed.max)
 {
@@ -205,17 +200,15 @@ for (seed in seed.min:seed.max)
   if (!ROTATE45)
     v <- ppp(vx, vy, c(0, 10), c(0, 10))
   maze <- linnet(v, edges = edge)
-  X <- runiflpp(n = 396, L = maze, nsim = 1)
+  X <- runiflpp(n = N, L = maze, nsim = 1)
   X$data <- cbind(X$data, marks = sapply(X$data$seg, function(x) ifelse(x %in% mainroute, "main", "sub")))
-  mutation <- rep(0, 396)
+  mutation <- rep(0, N)
   for (j in junction)
   {
     jx <- v$x[j]
     jy <- v$y[j]
-    for (i in 1:396)
-      mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 1)
   }
-  X$data$marks[runif(396) < mutation] <- "junction"
+  X$data$marks[runif(N) < mutation] <- "junction"
   X$data$marks <- factor(X$data$marks, c("main", "sub", "junction"))
   if (MUTATEMORE)
   {
@@ -225,35 +218,82 @@ for (seed in seed.min:seed.max)
   }
   X$ctype <- c(X$ctype, as.factor("mark"))
   tb <- table(X$data$marks)
-  folds <- rep(1, 396)
+  folds <- rep(1, N)
   for (i in 1:3)
     folds[X$data$marks == names(tb[i])] <- as.integer((order(runif(tb[i])) - 1) / tb[i] * 5) + 1
   plot(X, main = paste("Seed", as.character(seed)), cex = 2)
-  
-  ## Leave-one-out cross validation for treeparty.adaboost
   
   y <- X$data$marks
   x <- data.frame(x = X$data$x, y = X$data$y)
   
   labels <- levels(y)
+  
   for (i in 1:length(y))
   {
     for (it in 1L:iter)
       if (knn(x[-i,], x[i,], y[-i], it) == y[i])
-        correct.knn[seed, it] <- correct.knn[seed, it] + 1
-    if ((i < 396 || seed < seed.max) && i %% 99 == 0)
-      print((Sys.time() - starttime) * (396 - i + (seed.max - seed) * 396) / (i + (seed - seed.min) * 396))
+        correct.knn[seed, it] <- correct.knn[seed, it] + 1L
+    if ((i < N || seed < seed.max) && i %% 99 == 0)
+      print((Sys.time() - starttime) * (N - i + (seed.max - seed) * N) / (i + (seed - seed.min) * N))
   }
-  write.csv(correct.knn, "knn.csv")
+  if (MUTATEMORE)
+    write.csv(correct.knn, "knnC.csv")
+  else
+    write.csv(correct.knn, "knn.csv")
+
+  for (i in 1:length(y))
+  {
+    rf_fit <- randomForest(x[-i, ], y[-i], ntree = 100, mtry = 2)
+    pred_rf <- predict(rf_fit, x[i, ])
+    correct.rf[seed] <- correct.rf[seed] + (pred_rf == y[i])
+  }
+  if (MUTATEMORE)
+    write.csv(correct.rf, "RandomForestC.csv")
+  else
+    write.csv(correct.rf, "RandomForest.csv")
+  
+  sp_df <- data.frame(x = x$x, y = x$y, marks = y)
+  coordinates(sp_df) <- ~x+y
+  for (i in 1:length(y)) {
+    # [Indicator Kriging - LOOCV (OVR)]
+    train_ik <- sp_df[-i, ]
+    test_ik  <- sp_df[i, ]
+    prob_matrix <- matrix(0, nrow = 1L, ncol = length(labels))
+    colnames(prob_matrix) <- labels
+    
+    for (c in 1:length(labels)) {
+      cls <- labels[c]
+      train_ik$ind <- ifelse(train_ik$marks == cls, 1, 0)
+      
+      ik_res <- tryCatch({
+        autoKrige(ind ~ 1, input_data = train_ik, new_data = test_ik, 
+                  model = "Exp", verbose = F)
+      }, error = function(e) NULL)
+      
+      if (!is.null(ik_res)) {
+        prob_matrix[, c] <- pmax(0, pmin(1, ik_res$krige_output$var1.pred))
+      } else {
+        prob_matrix[, c] <- mean(train_ik$ind)
+      }
+    }
+    pred_ik <- labels[apply(prob_matrix, 1, which.max)]
+    if (pred_ik == as.character(y[i]))
+      correct.ik[seed] <- correct.ik[seed] + 1L
+  }
+  if (MUTATEMORE)
+    write.csv(correct.ik, "IndicatorKrigingC.csv")
+  else
+    write.csv(correct.ik, "IndicatorKriging.csv")
+  
+  if (seed < seed.max)
+    print((Sys.time() - starttime) * (seed.max - seed) / seed)
 }
 
-## 5-fold cross validation
+## 10-fold cross validation
 
-seed.min <- 1L
-seed.max <- 100L
 iter <- 100L
 
-for (eval in evals)
+for (eval in evals[1])
 {
 correct.treeparty <- matrix(0L, seed.max, iter)
 correct.Euclidean <- matrix(0L, seed.max, iter)
@@ -273,17 +313,21 @@ for (seed in seed.min:seed.max)
   if (!ROTATE45)
     v <- ppp(vx, vy, c(0, 10), c(0, 10))
   maze <- linnet(v, edges = edge)
-  X <- runiflpp(n = 396, L = maze, nsim = 1)
+  X <- runiflpp(n = N, L = maze, nsim = 1)
   X$data <- cbind(X$data, marks = sapply(X$data$seg, function(x) ifelse(x %in% mainroute, "main", "sub")))
-  mutation <- rep(0, 396)
+  mutation <- rep(0, N)
   for (j in junction)
   {
     jx <- v$x[j]
     jy <- v$y[j]
-    for (i in 1:396)
-      mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 1)
+    if (ROTATE45)
+      for (i in 1:N)
+        mutation[i] <- mutation[i] + max(0, 1 - sqrt(((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 2))
+    else
+      for (i in 1:N)
+        mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2))
   }
-  X$data$marks[runif(396) < mutation] <- "junction"
+  X$data$marks[runif(N) < mutation] <- "junction"
   X$data$marks <- factor(X$data$marks, c("main", "sub", "junction"))
   if (MUTATEMORE)
   {
@@ -293,15 +337,14 @@ for (seed in seed.min:seed.max)
   }
   X$ctype <- c(X$ctype, as.factor("mark"))
   tb <- table(X$data$marks)
-  folds <- rep(1, 396)
+  folds <- rep(1, N)
   for (i in 1:3)
-    folds[X$data$marks == names(tb[i])] <- as.integer((order(runif(tb[i])) - 1) / tb[i] * 5) + 1
+    folds[X$data$marks == names(tb[i])] <- as.integer((order(runif(tb[i])) - 1) / tb[i] * 10) + 1
   plot(X, main = paste("Seed", as.character(seed)), cex = 2)
-  
   visited <- treeparty.visit(X)
   built <- treeparty.build(X, visited)
   labels <- levels(built$marks)
-  for (i in 1L:5L)
+  for (i in 1L:10L)
   {
     weight <- ifelse(folds == i, 0, 1)
     adapted <- treeparty.adaboost(built, depth = 3, iter = iter, weight = weight, eval = eval)
@@ -319,14 +362,18 @@ for (seed in seed.min:seed.max)
       pred <- apply(preds, 1, which.max)
       correct.treeparty[seed, it] <- correct.treeparty[seed, it] + sum(pred == as.integer(built$marks[where]))
     }
-    cat(i, "/", 5, '\n')
+    cat(i, "/", 10, '\n')
   }
-  write.csv(correct.treeparty, paste("treeparty5.", eval, ".csv", sep = ""))
+  if (MUTATEMORE)
+    write.csv(correct.treeparty, paste("treeparty10C.", eval, ".csv", sep = ""))
+  else
+    write.csv(correct.treeparty, paste("treeparty10.", eval, ".csv", sep = ""))
+
   y <- X$data$marks
   x <- data.frame(x = X$data$x, y = X$data$y)
   
   labels <- levels(y)
-  for (i in 1L:5L)
+  for (i in 1L:10L)
   {
     where <- which(folds == i)
     adapted2 <- ada(x[-where,], y[-where], n_rounds = iter, verbose = F, progress = F, split = eval)
@@ -340,15 +387,22 @@ for (seed in seed.min:seed.max)
       pred <- apply(preds, 1, which.max)
       correct.Euclidean[seed, it] <- correct.Euclidean[seed, it] + sum(pred == as.integer(y[where]))
     }
-    cat(i, "/", 5, '\n')
+    cat(i, "/", 10, '\n')
   }
-  write.csv(correct.Euclidean, paste("Euclidean5.", eval, ".csv", sep = ""))
+  if (MUTATEMORE)
+    write.csv(correct.Euclidean, paste("Euclidean10C.", eval, ".csv", sep = ""))
+  else
+    write.csv(correct.Euclidean, paste("Euclidean10.", eval, ".csv", sep = ""))
 }
 }
+
+
 seed.min <- 1L
 seed.max <- 100L
 iter <- 20L
-correct.knn <- matrix(0, seed.max, iter)
+correct.knn <- matrix(0L, seed.max, iter)
+correct.rf <- rep(0L, seed.max)
+correct.ik <- rep(0L, seed.max)
 starttime <- Sys.time()
 for (seed in seed.min:seed.max)
 {
@@ -360,22 +414,22 @@ for (seed in seed.min:seed.max)
     vx <- vx + runif(100)
     vy <- vy + runif(100)
   }
-  if (ROTATE45)
-    v <- ppp(x = vx - vy, y = vx + vy, c(-10, 10), c(0, 20))
-  if (!ROTATE45)
-    v <- ppp(vx, vy, c(0, 10), c(0, 10))
   maze <- linnet(v, edges = edge)
-  X <- runiflpp(n = 396, L = maze, nsim = 1)
+  X <- runiflpp(n = N, L = maze, nsim = 1)
   X$data <- cbind(X$data, marks = sapply(X$data$seg, function(x) ifelse(x %in% mainroute, "main", "sub")))
-  mutation <- rep(0, 396)
+  mutation <- rep(0, N)
   for (j in junction)
   {
     jx <- v$x[j]
     jy <- v$y[j]
-    for (i in 1:396)
-      mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 1)
+    if (ROTATE45)
+      for (i in 1:N)
+        mutation[i] <- mutation[i] + max(0, 1 - sqrt(((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 2))
+    else
+      for (i in 1:N)
+        mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2))
   }
-  X$data$marks[runif(396) < mutation] <- "junction"
+  X$data$marks[runif(N) < mutation] <- "junction"
   X$data$marks <- factor(X$data$marks, c("main", "sub", "junction"))
   if (MUTATEMORE)
   {
@@ -385,108 +439,11 @@ for (seed in seed.min:seed.max)
   }
   X$ctype <- c(X$ctype, as.factor("mark"))
   tb <- table(X$data$marks)
-  folds <- rep(1, 396)
-  for (i in 1:3)
-    folds[X$data$marks == names(tb[i])] <- as.integer((order(runif(tb[i])) - 1) / tb[i] * 5) + 1
-  plot(X, main = paste("Seed", as.character(seed)), cex = 2)
-  
-  ## Leave-one-out cross validation for treeparty.adaboost
-  
-  y <- X$data$marks
-  x <- data.frame(x = X$data$x, y = X$data$y)
-  
-  labels <- levels(y)
-  for (i in 1:5)
-  {
-    for (it in 1L:iter)
-      correct.knn[seed, it] <- correct.knn[seed, it] + sum(knn(x[folds != i,], x[folds == i,], y[folds != i], it) == y[folds == i])
-    cat(i, "/", 5, '\n')
-  }
-  write.csv(correct.knn, "knn5.csv")
-}
-
-
-## 10-fold cross validation
-
-seed.min <- 1L
-seed.max <- 100L
-iter <- 100L
-
-for (eval in evals)
-{
-correct.treeparty <- matrix(0L, seed.max, iter)
-correct.Euclidean <- matrix(0L, seed.max, iter)
-
-for (seed in seed.min:seed.max)
-{
-  set.seed(seed)
-  vx <- rep(0:9, 10)
-  vy <- rep(0:9, each = 10)
-  if (MUTATEMORE)
-    
-    set.seed(seed)
-  vx <- rep(0:9, 10)
-  vy <- rep(0:9, each = 10)
-  if (MUTATEMORE)
-  {
-    vx <- vx + runif(100)
-    vy <- vy + runif(100)
-  }
-  if (ROTATE45)
-    v <- ppp(x = vx - vy, y = vx + vy, c(-10, 10), c(0, 20))
-  if (!ROTATE45)
-    v <- ppp(vx, vy, c(0, 10), c(0, 10))
-  maze <- linnet(v, edges = edge)
-  X <- runiflpp(n = 396, L = maze, nsim = 1)
-  X$data <- cbind(X$data, marks = sapply(X$data$seg, function(x) ifelse(x %in% mainroute, "main", "sub")))
-  mutation <- rep(0, 396)
-  for (j in junction)
-  {
-    jx <- v$x[j]
-    jy <- v$y[j]
-    for (i in 1:396)
-      mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 1)
-  }
-  X$data$marks[runif(396) < mutation] <- "junction"
-  X$data$marks <- factor(X$data$marks, c("main", "sub", "junction"))
-  if (MUTATEMORE)
-  {
-    noise <- sample(1:99, 5)
-    X.noise <- X$data$seg %in% noise
-    X$data$marks[X.noise] <- levels(X$data$marks)[as.integer(runif(sum(X.noise), 1, 4))]
-  }
-  X$ctype <- c(X$ctype, as.factor("mark"))
-  tb <- table(X$data$marks)
-  folds <- rep(1, 396)
+  folds <- rep(1, N)
   for (i in 1:3)
     folds[X$data$marks == names(tb[i])] <- as.integer((order(runif(tb[i])) - 1) / tb[i] * 10) + 1
   plot(X, main = paste("Seed", as.character(seed)), cex = 2)
   
-  visited <- treeparty.visit(X)
-  built <- treeparty.build(X, visited)
-  labels <- levels(built$marks)
-  for (i in 1L:10L)
-  {
-    weight <- ifelse(folds == i, 0, 1)
-    adapted <- treeparty.adaboost(built, depth = 3, iter = iter, weight = weight, eval = eval)
-    
-    ## iteration에 따른 예측값의 변화를 모두 확인하기 위해
-    ## treeparty.predict.ada의 코드를 긁어왔다.
-    where <- which(folds == i)
-    preds <- matrix(0, length(where), length(labels))
-    for (it in 1L:iter)
-    {
-      pred <- treeparty.predict(built, adapted$stumps[[it]], index = where)
-      pred <- as.integer(pred)
-      for (f in 1:nrow(preds))
-        preds[f, pred[f]] <- preds[f, pred[f]] + adapted$say[it]
-      pred <- apply(preds, 1, which.max)
-      correct.treeparty[seed, it] <- correct.treeparty[seed, it] + sum(pred == as.integer(built$marks[where]))
-    }
-    cat(i, "/", 10, '\n')
-  }
-  next
-  write.csv(correct.treeparty, paste("treeparty10.5.", eval, ".csv", sep = ""))
   y <- X$data$marks
   x <- data.frame(x = X$data$x, y = X$data$y)
   
@@ -494,28 +451,66 @@ for (seed in seed.min:seed.max)
   for (i in 1L:10L)
   {
     where <- which(folds == i)
-    adapted2 <- ada(x[-where,], y[-where], n_rounds = iter, verbose = F, progress = F, split = eval)
-    preds <- matrix(0, length(where), length(labels))
     for (it in 1L:iter)
-    {
-      pred <- stats::predict(adapted2$trees[[it]], x[where,], type = "class")
-      pred <- as.integer(pred)
-      for (f in 1:nrow(preds))
-        preds[f, pred[f]] <- preds[f, pred[f]] + adapted2$alphas[it]
-      pred <- apply(preds, 1, which.max)
-      correct.Euclidean[seed, it] <- correct.Euclidean[seed, it] + sum(pred == as.integer(y[where]))
-    }
-    cat(i, "/", 10, '\n')
+      correct.knn[seed, it] <- correct.knn[seed, it] + sum(knn(x[-where,], x[where,], y[-where], it) == y[where])
+    
   }
-  write.csv(correct.Euclidean, paste("Euclidean10.", eval, ".csv", sep = ""))
-}
-}
+  if (MUTATEMORE)
+    write.csv(correct.knn, "knn10C.csv")
+  else
+    write.csv(correct.knn, "knn10.csv")
 
-
+  for (i in 1L:10L) {
+    where <- which(folds == i)
+    
+    # [Random Forest - 10 Fold]
+    rf_fit <- randomForest(x[-where, ], y[-where], ntree = 500, mtry = 2)
+    pred_rf <- predict(rf_fit, x[where, ])
+    correct.rf[seed] <- correct.rf[seed] + sum(pred_rf == y[where])
+  }
+  
+  if (MUTATEMORE)
+    write.csv(correct.rf, "RandomForest10C.csv")
+  else
+    write.csv(correct.rf, "RandomForest10.csv")
+  sp_df <- data.frame(x = x$x, y = x$y, marks = y)
+  coordinates(sp_df) <- ~x+y
+  
+  for (i in 1L:10L) {
+    # [Indicator Kriging - 10 Fold (OVR)]
+    where <- which(folds == i)
+    train_ik <- sp_df[-where, ]
+    test_ik  <- sp_df[where, ]
+    prob_matrix <- matrix(0, nrow = length(where), ncol = length(labels))
+    colnames(prob_matrix) <- labels
+    
+    for (c in 1:length(labels)) {
+      cls <- labels[c]
+      train_ik$ind <- ifelse(train_ik$marks == cls, 1, 0)
+      
+      ik_res <- tryCatch({
+        autoKrige(ind ~ 1, input_data = train_ik, new_data = test_ik, 
+                  model = "Exp", verbose = F)
+      }, error = function(e) NULL)
+      
+      if (!is.null(ik_res)) {
+        prob_matrix[, c] <- pmax(0, pmin(1, ik_res$krige_output$var1.pred))
+      } else {
+        prob_matrix[, c] <- mean(train_ik$ind)
+      }
+    }
+    pred_ik <- labels[apply(prob_matrix, 1, which.max)]
+    correct.ik[seed] <- correct.ik[seed] + sum(pred_ik == as.character(y[where]))
+  }
+  if (MUTATEMORE)
+    write.csv(correct.ik, "IndicatorKriging10C.csv")
+  else
+    write.csv(correct.ik, "IndicatorKriging10.csv")
+}
 ## 18번 시드 재현
 
-seed <- 18
-iter <- 100
+seed <- 29L
+iter <- 100L
 set.seed(seed)
 vx <- rep(0:9, 10)
 vy <- rep(0:9, each = 10)
@@ -524,22 +519,16 @@ if (MUTATEMORE)
   vx <- vx + runif(100)
   vy <- vy + runif(100)
 }
-if (ROTATE45)
-  v <- ppp(x = vx - vy, y = vx + vy, c(-10, 10), c(0, 20))
-if (!ROTATE45)
-  v <- ppp(vx, vy, c(0, 10), c(0, 10))
 maze <- linnet(v, edges = edge)
-X <- runiflpp(n = 396, L = maze, nsim = 1)
+X <- runiflpp(n = N, L = maze, nsim = 1)
 X$data <- cbind(X$data, marks = sapply(X$data$seg, function(x) ifelse(x %in% mainroute, "main", "sub")))
-mutation <- rep(0, 396)
+mutation <- rep(0, N)
 for (j in junction)
 {
   jx <- v$x[j]
   jy <- v$y[j]
-  for (i in 1:396)
-    mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 1)
 }
-X$data$marks[runif(396) < mutation] <- "junction"
+X$data$marks[runif(N) < mutation] <- "junction"
 X$data$marks <- factor(X$data$marks, c("main", "sub", "junction"))
 if (MUTATEMORE)
 {
@@ -548,7 +537,7 @@ if (MUTATEMORE)
   X$data$marks[X.noise] <- levels(X$data$marks)[as.integer(runif(sum(X.noise), 1, 4))]
 }
 X$ctype <- c(X$ctype, as.factor("mark"))
-plot(X, main = paste("Seed", as.character(seed)))
+plot(X, main = paste("Seed", as.character(seed)), cex = 2)
 
 visited <- treeparty.visit(X)
 built <- treeparty.build(X, visited)
@@ -572,9 +561,9 @@ for (i in 1L:length(built$marks))
   }
   pred.treeparty[i] <- which.max(preds)
   
-  #cat(i, "/", 396, '\n')
-  if (i < 396)
-    print((Sys.time() - starttime) * (396 - i) / i)
+  #cat(i, "/", N, '\n')
+  if (i < N)
+    print((Sys.time() - starttime) * (N - i) / i)
 }
 
 pred.treeparty <- factor(pred.treeparty, levels = 1:3)
@@ -599,7 +588,7 @@ pred.Euclidean <- rep(0, length(built$marks))
 starttime <- Sys.time()
 for (i in 1:length(y))
 {
-  adapted2 <- ada(x[-i,], y[-i], n_rounds = iter, verbose = FALSE, progress = FALSE)
+  adapted2 <- ada(x[-i,], y[-i], n_rounds = iter, verbose = F, progress = F)
   preds <- rep(0, 3)
   for (it in 1L:iter)
   {
@@ -608,8 +597,8 @@ for (i in 1:length(y))
     preds[pred] <- preds[pred] + adapted2$alphas[it]
   }
   pred.Euclidean[i] <- which.max(preds)
-  if (i < 396)
-    print((Sys.time() - starttime) * (396 - i) / i)
+  if (i < N)
+    print((Sys.time() - starttime) * (N - i) / i)
 }
 
 pred.Euclidean <- factor(pred.Euclidean, levels = 1:3)
@@ -644,17 +633,21 @@ for (seed in seed.min:seed.max)
   if (!ROTATE45)
     v <- ppp(vx, vy, c(0, 10), c(0, 10))
   maze <- linnet(v, edges = edge)
-  X <- runiflpp(n = 396, L = maze, nsim = 1)
+  X <- runiflpp(n = N, L = maze, nsim = 1)
   X$data <- cbind(X$data, marks = sapply(X$data$seg, function(x) ifelse(x %in% mainroute, "main", "sub")))
-  mutation <- rep(0, 396)
+  mutation <- rep(0, N)
   for (j in junction)
   {
     jx <- v$x[j]
     jy <- v$y[j]
-    for (i in 1:396)
-      mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 1)
+    if (ROTATE45)
+      for (i in 1:N)
+        mutation[i] <- mutation[i] + max(0, 1 - sqrt(((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 2))
+    else
+      for (i in 1:N)
+        mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2))
   }
-  X$data$marks[runif(396) < mutation] <- "junction"
+  X$data$marks[runif(N) < mutation] <- "junction"
   X$data$marks <- factor(X$data$marks, c("main", "sub", "junction"))
   if (MUTATEMORE)
   {
@@ -677,22 +670,16 @@ if (MUTATEMORE)
   vx <- vx + runif(100)
   vy <- vy + runif(100)
 }
-if (ROTATE45)
-  v <- ppp(x = vx - vy, y = vx + vy, c(-10, 10), c(0, 20))
-if (!ROTATE45)
-  v <- ppp(vx, vy, c(0, 10), c(0, 10))
 maze <- linnet(v, edges = edge)
-X <- runiflpp(n = 396, L = maze, nsim = 1)
+X <- runiflpp(n = N, L = maze, nsim = 1)
 X$data <- cbind(X$data, marks = sapply(X$data$seg, function(x) ifelse(x %in% mainroute, "main", "sub")))
-mutation <- rep(0, 396)
+mutation <- rep(0, N)
 for (j in junction)
 {
   jx <- v$x[j]
   jy <- v$y[j]
-  for (i in 1:396)
-    mutation[i] <- mutation[i] + max(0, 1 - sqrt((jx - X$data$x[i]) ^ 2 + (jy - X$data$y[i]) ^ 2) / 1)
 }
-X$data$marks[runif(396) < mutation] <- "junction"
+X$data$marks[runif(N) < mutation] <- "junction"
 X$data$marks <- factor(X$data$marks, c("main", "sub", "junction"))
 if (MUTATEMORE)
 {
@@ -703,3 +690,84 @@ if (MUTATEMORE)
 X$ctype <- c(X$ctype, as.factor("mark"))
 tb <- table(X$data$marks)
 plot(X, main = paste("Seed", as.character(seed)), cex = 2)
+
+## indicator kriging parameters
+nugget <- matrix(0, seed.max, length(labels))
+sill <- matrix(0, seed.max, length(labels))
+range_ <- matrix(0, seed.max, length(labels))
+starttime <- Sys.time()
+for (seed in seed.min:seed.max)
+{
+  set.seed(seed)
+  vx <- rep(0:9, 10)
+  vy <- rep(0:9, each = 10)
+  if (MUTATEMORE)
+  {
+    vx <- vx + runif(100)
+    vy <- vy + runif(100)
+  }
+  maze <- linnet(v, edges = edge)
+  X <- runiflpp(n = N, L = maze, nsim = 1)
+  X$data <- cbind(X$data, marks = sapply(X$data$seg, function(x) ifelse(x %in% mainroute, "main", "sub")))
+  mutation <- rep(0, N)
+  for (j in junction)
+  {
+    jx <- v$x[j]
+    jy <- v$y[j]
+  }
+  X$data$marks[runif(N) < mutation] <- "junction"
+  X$data$marks <- factor(X$data$marks, c("main", "sub", "junction"))
+  if (MUTATEMORE)
+  {
+    noise <- sample(1:99, 5)
+    X.noise <- X$data$seg %in% noise
+    X$data$marks[X.noise] <- levels(X$data$marks)[as.integer(runif(sum(X.noise), 1, 4))]
+  }
+  X$ctype <- c(X$ctype, as.factor("mark"))
+  tb <- table(X$data$marks)
+  folds <- rep(1, N)
+  for (i in 1:3)
+    folds[X$data$marks == names(tb[i])] <- as.integer((order(runif(tb[i])) - 1) / tb[i] * 5) + 1
+  plot(X, main = paste("Seed", as.character(seed)), cex = 2)
+  
+  y <- X$data$marks
+  x <- data.frame(x = X$data$x, y = X$data$y)
+  
+  labels <- levels(y)
+  
+  sp_df <- data.frame(x = x$x, y = x$y, marks = y)
+  coordinates(sp_df) <- ~x+y
+  # [Indicator Kriging - LOOCV (OVR)]
+  
+  for (c in 1:length(labels)) {
+    cls <- labels[c]
+    sp_df$ind <- ifelse(sp_df$marks == cls, 1, 0)
+    
+    ik_res <- tryCatch({
+      autoKrige(ind ~ 1, input_data = sp_df, 
+                model = "Exp", verbose = F)
+    }, error = function(e) NULL)
+    nugget[seed, c] <- ik_res$var_model[1, 2]
+    sill[seed, c] <- ik_res$var_model[2, 2]
+    range_[seed, c] <- ik_res$var_model[2, 3]
+  }
+  if (seed < seed.max)
+    print((Sys.time() - starttime) * (seed.max - seed) / seed)
+}
+range(nugget)
+range(sill)
+range(range_)
+
+png("estimateC.png", 1920, 1440)
+par(mfrow = c(3, 3))
+par(mar = c(6, 6, 6, 6))
+for (c in 1:3)
+{
+  hist(nugget[,c], breaks = 0:14 / 100, xlab = "nugget", cex.lab = 2, cex.axis = 2, cex.main = 2,
+       main = paste("Estimation for", labels[c]))
+  hist(sill[,c], breaks = 3:15 / 50, xlab = "sill", cex.lab = 2, cex.axis = 2, cex.main = 2,
+       main = paste("Estimation for", labels[c]))
+  hist(range_[,c], breaks = 0:16 / 5, xlab = "range", cex.lab = 2, cex.axis = 2, cex.main = 2,
+       main = paste("Estimation for", labels[c]))
+}
+dev.off()
